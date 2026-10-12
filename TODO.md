@@ -230,5 +230,7 @@ WMI-Dialog, Anzeige von Blöcken und Filtern. Noch von Hand durchzuklicken:
       ausgeschlossenen Rechner und weist in Orange darauf hin (Ursache der „leeren unteren Vorschau“)
 - [x] 2026-10-12 Version 2.13.0: Editor-Schalter „100 %“ – Panel ohne Windows-Skalierung und ohne
       relative Breite zeichnen (schaltet `panel.scaleWithDpi` und `panel.screenFraction` zusammen)
+- [x] 2026-10-12 Version 2.13.1: Update-Meldung des Editors mit „Jetzt neu starten“, wenn er sich selbst
+      aktualisiert hat (geprüft: alter Prozess endet, neuer startet mit derselben Datei)
 - [x] 2026-10-01 Rendering von SixLabors ImageSharp auf `System.Drawing.Common` (GDI+, MIT)
       umgestellt – Entscheidung Rendering-Bibliothek damit erledigt, kein Lizenzthema mehr

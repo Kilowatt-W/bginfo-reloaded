@@ -115,6 +115,8 @@ The tabs and buttons (German labels in parentheses):
   (including itself – active from the next start – and a newer configuration, which it then
   reloads); without it, it only reports what is available. A message appears only if there is
   something to say (fetched, available, folder not reachable); after that the editor continues normally.
+  If the editor itself was updated, the message offers “Jetzt neu starten” (restart now): the editor
+  closes and starts again with the same file in the new version.
 - **Show preview (Vorschau anzeigen):** shows the current result (unsaved changes included) full
   screen in the foreground – without frame, taskbar and desktop icons, on the screen the editor is
   on and rendered for its resolution. Esc, any key or a click closes it; the wallpaper stays untouched.

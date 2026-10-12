@@ -189,7 +189,7 @@ public sealed class MainForm : Form
                 BeginInvoke(() => AskForStartConfiguration(fileToOpen));
             }
         };
-        FormClosing += (_, e) => e.Cancel = !ConfirmDiscard();
+        FormClosing += (_, e) => e.Cancel = !_restarting && !ConfirmDiscard();
     }
 
     // ------------------------------------------------------------------ Aufbau der Oberflaeche
@@ -2129,8 +2129,63 @@ public sealed class MainForm : Form
                 : "\r\n\r\nEs wurde nichts geholt: „Bei jedem Lauf prüfen und Neueres von selbst holen“ ist ausgeschaltet\r\n(Reiter „Autostart und Werkzeuge“). Von Hand: BGInfo-Reloaded.exe --update";
         }
         _status.Text = messages[^1];
+
+        // Der Editor selbst wurde ersetzt: die neue Version laeuft erst nach einem Neustart - den gleich anbieten.
+        if (auto && result is { SelfUpdated: true })
+        {
+            var restart = new TaskDialogButton("Jetzt neu starten");
+            var later = new TaskDialogButton("Später");
+            var page = new TaskDialogPage
+            {
+                Caption = AppTitle + " – Update",
+                Heading = "Der Editor wurde aktualisiert",
+                Text = text,
+                Icon = TaskDialogIcon.Information,
+                Buttons = { restart, later },
+                DefaultButton = restart,
+                AllowCancel = true
+            };
+            if (TaskDialog.ShowDialog(this, page) == restart)
+            {
+                RestartEditor();
+            }
+            return;
+        }
+
         MessageBox.Show(this, text, AppTitle + " – Update", MessageBoxButtons.OK,
             result is { Reachable: true } ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+    }
+
+    // Beim Neustart nicht noch einmal nach ungespeicherten Aenderungen fragen - das ist dann schon geklaert.
+    private bool _restarting;
+
+    /// <summary>Beendet den Editor und startet ihn mit derselben Konfigurationsdatei neu (nach einem Selbst-Update).</summary>
+    private void RestartEditor()
+    {
+        if (!ConfirmDiscard())
+        {
+            return;
+        }
+        try
+        {
+            var start = new System.Diagnostics.ProcessStartInfo(Environment.ProcessPath!)
+            {
+                UseShellExecute = false,
+                WorkingDirectory = Environment.CurrentDirectory
+            };
+            if (_path != null)
+            {
+                start.ArgumentList.Add(_path);
+            }
+            System.Diagnostics.Process.Start(start);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"Der Neustart ist nicht gelungen:\r\n{ex.Message}\r\n\r\nBitte den Editor von Hand neu starten.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        _restarting = true;
+        Close();
     }
 
     private void NewConfig()

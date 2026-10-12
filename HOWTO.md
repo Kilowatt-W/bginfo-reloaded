@@ -107,7 +107,9 @@ BGInfo-Reloaded-Editor.exe BGInfo-Reloaded.json      eine vorhandene Datei öffn
   ihn der Editor beim Start. Mit `update.auto` holt er Neueres wie `BGInfo-Reloaded.exe` (auch sich
   selbst – aktiv ab dem nächsten Start – und eine neuere Konfiguration, die er dann neu lädt); ohne
   meldet er nur, was bereitliegt. Eine Meldung erscheint nur, wenn es etwas zu sagen gibt (geholt,
-  verfügbar, Ordner nicht erreichbar); danach geht es normal weiter.
+  verfügbar, Ordner nicht erreichbar); danach geht es normal weiter. Wurde der Editor selbst
+  aktualisiert, bietet die Meldung „Jetzt neu starten“ an: der Editor beendet sich und startet mit
+  derselben Datei in der neuen Version.
 - **Vorschau anzeigen:** zeigt die aktuelle Darstellung (auch ungespeichert) als Vollbild im
   Vordergrund – ohne Rahmen, Taskleiste und Desktop-Symbole, auf dem Bildschirm des Editors und für
   dessen Auflösung gerendert. Esc, eine Taste oder ein Klick schließt; das Wallpaper bleibt unberührt.
