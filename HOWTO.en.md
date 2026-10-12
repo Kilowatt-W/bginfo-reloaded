@@ -122,6 +122,8 @@ The tabs and buttons (German labels in parentheses):
   on and rendered for its resolution. Esc, any key or a click closes it; the wallpaper stays untouched.
 - **Apply now (Jetzt anwenden):** saves and runs the `BGInfo-Reloaded.exe` in the same folder with
   this file – the wallpaper is really set.
+- **Apply and exit (Anwenden und beenden):** like “Jetzt anwenden”, then the editor closes. If the
+  exe reports an error, it stays open and shows the message.
 
 Please note:
 

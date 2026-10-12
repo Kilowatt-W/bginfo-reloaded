@@ -232,5 +232,6 @@ WMI-Dialog, Anzeige von Blöcken und Filtern. Noch von Hand durchzuklicken:
       relative Breite zeichnen (schaltet `panel.scaleWithDpi` und `panel.screenFraction` zusammen)
 - [x] 2026-10-12 Version 2.13.1: Update-Meldung des Editors mit „Jetzt neu starten“, wenn er sich selbst
       aktualisiert hat (geprüft: alter Prozess endet, neuer startet mit derselben Datei)
+- [x] 2026-10-12 Version 2.13.2: Editor-Knopf „Anwenden und beenden“ (geprüft: exe läuft mit Exit 0, Editor schließt sich)
 - [x] 2026-10-01 Rendering von SixLabors ImageSharp auf `System.Drawing.Common` (GDI+, MIT)
       umgestellt – Entscheidung Rendering-Bibliothek damit erledigt, kein Lizenzthema mehr

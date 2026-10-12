@@ -245,7 +245,8 @@ public sealed class MainForm : Form
         bar.Items.Add(_scaleToggle);
         bar.Items.Add(Button("Vorschau aktualisieren", '\uE72C', "Werte neu abfragen und Vorschau neu rendern", RenderPreview));
         bar.Items.Add(Button("Vorschau anzeigen", '\uE740', "Die aktuelle Darstellung als Vollbild zeigen – so, wie sie auf dem Desktop aussieht (Esc oder Klick schließt)", ShowFullscreenPreview));
-        bar.Items.Add(Button("Jetzt anwenden", '\uE768', "Speichern und BGInfo-Reloaded.exe mit dieser Konfiguration ausführen", Apply));
+        bar.Items.Add(Button("Jetzt anwenden", '\uE768', "Speichern und BGInfo-Reloaded.exe mit dieser Konfiguration ausführen", () => Apply(false)));
+        bar.Items.Add(Button("Anwenden und beenden", '\uE8FB', "Speichern, BGInfo-Reloaded.exe mit dieser Konfiguration ausführen und den Editor danach schließen.\r\nBei einem Fehler bleibt der Editor offen.", () => Apply(true)));
         return bar;
     }
 
@@ -2354,7 +2355,11 @@ public sealed class MainForm : Form
     }
 
     /// <summary>Speichert und laesst die eigentliche Arbeit BGInfo-Reloaded.exe tun - so wird genau der Weg benutzt, der spaeter auch auf den Zielrechnern laeuft.</summary>
-    private async void Apply()
+    /// <summary>
+    /// Speichert und fuehrt BGInfo-Reloaded.exe mit dieser Konfiguration aus. Mit
+    /// <paramref name="exitAfter"/> schliesst sich der Editor danach - aber nur, wenn es geklappt hat.
+    /// </summary>
+    private async void Apply(bool exitAfter)
     {
         var exe = Path.Combine(Path.GetDirectoryName(Environment.ProcessPath) ?? "", "BGInfo-Reloaded.exe");
         if (!File.Exists(exe))
@@ -2376,6 +2381,17 @@ public sealed class MainForm : Form
             _status.Text = process.ExitCode == 0
                 ? "Angewendet – das Wallpaper wurde gesetzt."
                 : $"BGInfo-Reloaded.exe meldet einen Fehler (Exit-Code {process.ExitCode}). Details: {RunLog.LogFile}";
+            if (exitAfter)
+            {
+                if (process.ExitCode == 0)
+                {
+                    Close(); // gespeichert ist schon - es folgt keine Rueckfrage
+                }
+                else
+                {
+                    MessageBox.Show(this, _status.Text + "\r\n\r\nDer Editor bleibt geöffnet.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+            }
         }
         catch (Exception ex)
         {

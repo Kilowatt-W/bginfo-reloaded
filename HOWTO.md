@@ -115,6 +115,8 @@ BGInfo-Reloaded-Editor.exe BGInfo-Reloaded.json      eine vorhandene Datei öffn
   dessen Auflösung gerendert. Esc, eine Taste oder ein Klick schließt; das Wallpaper bleibt unberührt.
 - **Jetzt anwenden:** speichert und führt die `BGInfo-Reloaded.exe` im selben Ordner mit dieser Datei
   aus – das Wallpaper wird dabei wirklich gesetzt.
+- **Anwenden und beenden:** wie „Jetzt anwenden“, danach schließt sich der Editor. Meldet die exe
+  einen Fehler, bleibt er mit der Meldung offen.
 
 Zu beachten:
 
