@@ -336,6 +336,25 @@ scaled to fit. `screenFraction` also takes precedence over `width`: if both are 
 width applies and the panel follows the content again. If a fixed width is not enough for both
 columns, the automatically sized label column gets at most 45 % of it.
 
+### Border (`border`)
+
+```jsonc
+"border": {
+  "width": 2,            // line width in pixels, 0 = no border (default)
+  "style": "Solid",      // Solid = line, Dotted = dots, Dashed = dashes
+  "scope": "Panel",      // Panel = around the whole panel, Sections = one box per section, Rows = grid around every line
+  "color": "#FFFFFF80"   // #RRGGBBAA
+}
+```
+
+- `Sections`: one box per heading with its lines; a spacer separates the boxes visibly, without a
+  spacer they touch.
+- `Rows`: a grid around every line with label and value, with a divider between the columns;
+  headings stay free.
+- The border lies within the existing padding and line spacing: size and position of the panel do
+  not change. The line width is scaled like the panel.
+- In the editor: tab “Aussehen”, section “Rahmen”.
+
 ### Date and number format (`format`)
 
 ```jsonc

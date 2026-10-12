@@ -494,6 +494,40 @@ public sealed class ItemConfig
 }
 
 /// <summary>Selbst-Update aus einem Ordner (siehe FolderUpdater).</summary>
+/// <summary>Art der Rahmenlinie.</summary>
+public enum BorderLine
+{
+    Solid,
+    Dotted,
+    Dashed
+}
+
+/// <summary>Worum der Rahmen gezogen wird.</summary>
+public enum BorderScope
+{
+    /// <summary>Ein Rahmen um das ganze Panel.</summary>
+    Panel,
+
+    /// <summary>Je Abschnitt (Ueberschrift mit ihren Zeilen) ein Kasten.</summary>
+    Sections,
+
+    /// <summary>Ein Gitter um jede Zeile mit Trennlinie zwischen Bezeichnung und Wert.</summary>
+    Rows
+}
+
+/// <summary>Rahmen um das Panel, die Abschnitte oder die einzelnen Zeilen. Breite 0 = kein Rahmen.</summary>
+public sealed class BorderConfig
+{
+    public string Color { get; set; } = "#FFFFFF80";
+
+    /// <summary>Strichstaerke in Pixeln (wird wie das Panel skaliert); 0 = kein Rahmen.</summary>
+    public int Width { get; set; }
+
+    public BorderLine Style { get; set; } = BorderLine.Solid;
+
+    public BorderScope Scope { get; set; } = BorderScope.Panel;
+}
+
 /// <summary>Darstellung von Datums- und Zahlenwerten der Platzhalter (siehe <see cref="ValueFormat"/>).</summary>
 public sealed class FormatConfig
 {
@@ -578,6 +612,7 @@ public sealed class AppConfig
     public HostsConfig Hosts { get; set; } = new();
     public UpdateConfig Update { get; set; } = new();
     public FormatConfig Format { get; set; } = new();
+    public BorderConfig Border { get; set; } = new();
 
     /// <summary>
     /// Zentrale Datei (Pfad, UNC oder http(s)-URL; relativ zu <see cref="BaseDirectory"/>) mit
@@ -1006,6 +1041,7 @@ public sealed class AppConfig
             config.Fields ??= new();
             config.Items ??= new();
             config.Format ??= new();
+            config.Border ??= new();
             return config;
         }
         catch (JsonException ex)

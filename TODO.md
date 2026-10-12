@@ -224,5 +224,7 @@ WMI-Dialog, Anzeige von Blöcken und Filtern. Noch von Hand durchzuklicken:
 - [x] 2026-10-12 Version 2.11.0: `split` teilt einen Wert an Trennzeichen auf mehrere Zeilen; Laufzeit nach
       Sprache und `{uptime:Format}`; Editor: Suche in der Platzhalterliste, kurzer Titel mit Hinweiszeile,
       hervorgehobene Spaltenköpfe (exe: neutral/de/en/fr und Teilen geprüft; Editor per Bildschirmfoto)
+- [x] 2026-10-12 Version 2.12.0: Rahmen (`border`: Farbe, Stärke, Linie/Punkte/strichliert) um Panel,
+      Abschnitte oder Zeilen; Editor: Reiter „Aussehen“ (alle drei Arten gerendert und angesehen)
 - [x] 2026-10-01 Rendering von SixLabors ImageSharp auf `System.Drawing.Common` (GDI+, MIT)
       umgestellt – Entscheidung Rendering-Bibliothek damit erledigt, kein Lizenzthema mehr

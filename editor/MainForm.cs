@@ -519,6 +519,23 @@ public sealed class MainForm : Form
         Row(table, "Bezeichnungen", ColorButton(() => _config.Colors.Label, v => _config.Colors.Label = v));
         Row(table, "Werte", ColorButton(() => _config.Colors.Value, v => _config.Colors.Value = v));
 
+        Heading(table, "Rahmen");
+        Row(table, "Rahmen um", Combo(new[]
+        {
+            (BorderScope.Panel, "Das ganze Panel"),
+            (BorderScope.Sections, "Jeden Abschnitt – Überschrift mit ihren Zeilen"),
+            (BorderScope.Rows, "Jede Zeile – Gitter mit Trennlinie zwischen Bezeichnung und Wert")
+        }, () => _config.Border.Scope, v => _config.Border.Scope = v));
+        Row(table, "Strichstärke (0 = kein Rahmen)", Number(0, 40, () => _config.Border.Width, v => _config.Border.Width = (int)v));
+        Row(table, "Art", Combo(new[]
+        {
+            (BorderLine.Solid, "Linie"),
+            (BorderLine.Dotted, "Punkte"),
+            (BorderLine.Dashed, "Strichliert")
+        }, () => _config.Border.Style, v => _config.Border.Style = v));
+        Row(table, "Farbe", ColorButton(() => _config.Border.Color, v => _config.Border.Color = v));
+        Row(table, "", Hint("Der Rahmen liegt im vorhandenen Innen- und Zeilenabstand – Größe und Lage des Panels ändern sich nicht.\r\nFür Kästen und Gitter gegebenenfalls den Innenabstand oben etwas vergrößern."));
+
         Heading(table, "Datum und Zahlen");
         var formatSample = new Label { AutoSize = true, ForeColor = SystemColors.GrayText };
         void ShowFormatSample()

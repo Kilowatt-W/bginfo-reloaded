@@ -85,6 +85,8 @@ echtes Windows nötig, das in dieser Entwicklungsumgebung nicht zur Verfügung s
   Rechteck zeichnen – so werden sie mit „…“ gekürzt statt über das Panel hinauszulaufen. Mit
   `panel.textOverflow = Wrap` wird stattdessen umbrochen; die Höhe jeder Zeile steht dann in
   `rowHeights` (nicht mehr `layout.LineHeight` allein). Bei `screenFraction` wird nie umbrochen.
+  Rahmen (`border`, `DrawBorders`) liegen absichtlich im vorhandenen Innen- und Zeilenabstand und
+  verändern die Maße des Panels nicht – sie richten sich nach den tatsächlich gezeichneten Zeilen.
 - **TargetFramework ist `net8.0-windows`**, nicht `net8.0` – das schaltet den
   `SupportedOSPlatform("windows")`-Analyzer sauber frei für die WMI/Registry/P-Invoke-Aufrufe, ohne
   eine echte Windows-Desktop-SDK-Abhängigkeit (WPF/WinForms) zu brauchen. Nicht auf `net8.0` zurück

@@ -323,6 +323,25 @@ skaliert, dass er passt. `screenFraction` hat außerdem Vorrang vor `width`: ist
 die relative Breite, und das Panel richtet sich wieder nach dem Inhalt. Reicht eine feste Breite
 nicht für beide Spalten, bekommt die automatisch bemessene Bezeichnungsspalte höchstens 45 % davon.
 
+### Rahmen (`border`)
+
+```jsonc
+"border": {
+  "width": 2,            // Strichstärke in Pixeln, 0 = kein Rahmen (Standard)
+  "style": "Solid",      // Solid = Linie, Dotted = Punkte, Dashed = strichliert
+  "scope": "Panel",      // Panel = um das ganze Panel, Sections = je Abschnitt ein Kasten, Rows = Gitter um jede Zeile
+  "color": "#FFFFFF80"   // #RRGGBBAA
+}
+```
+
+- `Sections`: ein Kasten je Überschrift mit ihren Zeilen; ein Leerraum (`spacer`) trennt die Kästen
+  sichtbar, ohne Leerraum stoßen sie aneinander.
+- `Rows`: Gitter um jede Zeile mit Bezeichnung und Wert, mit Trennlinie zwischen den Spalten;
+  Überschriften bleiben frei.
+- Der Rahmen liegt im vorhandenen Innen- und Zeilenabstand: Größe und Lage des Panels ändern sich
+  nicht. Die Strichstärke wird wie das Panel skaliert.
+- Im Editor: Reiter „Aussehen“, Abschnitt „Rahmen“.
+
 ### Datums- und Zahlenformat (`format`)
 
 ```jsonc

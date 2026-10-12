@@ -242,6 +242,9 @@ public static class WallpaperRenderer
                 }
             }
 
+            // Lage jeder gezeichneten Zeile - danach richten sich die Rahmen um Abschnitte und Zeilen.
+            var drawnRows = new List<(InfoLine Line, int Top, int Height)>();
+
             var y = panelY + padding;
             for (var row = 0; row < lines.Count; row++)
             {
@@ -251,6 +254,7 @@ public static class WallpaperRenderer
                 {
                     break; // mehr Zeilen, als auf den Bildschirm passen
                 }
+                drawnRows.Add((line, y, height));
 
                 if (line.Kind == LineKind.Section)
                 {
@@ -264,12 +268,108 @@ public static class WallpaperRenderer
                 y += height;
             }
 
+            DrawBorders(graphics, config.Border, drawnRows, new Rectangle(panelX, panelY, panelWidth, panelHeight), radius,
+                padding, labelColumnWidth, Math.Min(layout.Gap, Scaled(8)), layout.ValueLineHeight, layout.Scale);
+
             Save(image, outputImagePath);
             return new Rectangle(panelX, panelY, panelWidth, panelHeight);
         }
         finally
         {
             layout.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Zeichnet den Rahmen aus "border": um das ganze Panel, je Abschnitt (Ueberschrift mit ihren
+    /// Zeilen) oder als Gitter um jede Zeile. Die Linien liegen im vorhandenen Innenabstand und
+    /// Zeilenabstand - Groesse und Lage des Panels aendern sich durch den Rahmen nicht.
+    /// </summary>
+    private static void DrawBorders(Graphics graphics, BorderConfig border, List<(InfoLine Line, int Top, int Height)> rows, Rectangle panel,
+        int radius, int padding, int labelColumnWidth, int labelGap, int valueLineHeight, float scale)
+    {
+        if (border.Width <= 0)
+        {
+            return;
+        }
+
+        var width = Math.Max(1, (int)Math.Round(border.Width * scale));
+        using var pen = new Pen(ParseColor(border.Color, "border.color"), width)
+        {
+            DashStyle = border.Style switch
+            {
+                BorderLine.Dotted => DashStyle.Dot,
+                BorderLine.Dashed => DashStyle.Dash,
+                _ => DashStyle.Solid
+            }
+        };
+
+        if (border.Scope == BorderScope.Panel)
+        {
+            // Die Linie liegt ganz innerhalb der Panelflaeche: um die halbe Strichstaerke nach innen.
+            var half = width / 2;
+            using var path = RoundedRectangle(panel.X + half, panel.Y + half, panel.Width - width, panel.Height - width, Math.Max(0, radius - half));
+            graphics.DrawPath(pen, path);
+            return;
+        }
+
+        // Kasten und Gitter ragen seitlich um den halben Innenabstand ueber den Text hinaus. Der Text
+        // steht oben in seiner Zeile, der Zeilenabstand darunter - die Linien liegen deshalb um ein
+        // Fuenftel der Zeilenhoehe hoeher, dann sitzt der Text mittig zwischen ihnen.
+        var side = Math.Max(1, padding / 2);
+        var lift = Math.Max(1, valueLineHeight / 5);
+        var left = panel.X + padding - side;
+        var right = panel.Right - padding + side;
+        var corner = Math.Min(radius / 2, side);
+
+        if (border.Scope == BorderScope.Sections)
+        {
+            // Ein Abschnitt reicht von einer Ueberschrift (oder der ersten Zeile) bis vor den naechsten
+            // Leerraum bzw. die naechste Ueberschrift.
+            var start = -1;
+            for (var i = 0; i <= rows.Count; i++)
+            {
+                var isSection = i < rows.Count && rows[i].Line.Kind == LineKind.Section;
+                var isSpacer = isSection && string.IsNullOrEmpty(rows[i].Line.Label);
+                if (start >= 0 && (i == rows.Count || isSection))
+                {
+                    var top = rows[start].Top - lift;
+                    var bottom = rows[i - 1].Top + rows[i - 1].Height - lift;
+                    using var box = RoundedRectangle(left, top, right - left, bottom - top, corner);
+                    graphics.DrawPath(pen, box);
+                    start = -1;
+                }
+                if (i < rows.Count && !isSpacer && start < 0)
+                {
+                    start = i;
+                }
+            }
+            return;
+        }
+
+        // Rows: jede Wertzeile bekommt Linien oben und unten, aufeinanderfolgende Zeilen teilen sie
+        // sich; dazu die Seiten und eine Trennlinie zwischen Bezeichnung und Wert.
+        var divider = panel.X + padding + labelColumnWidth - labelGap / 2;
+        for (var i = 0; i < rows.Count; i++)
+        {
+            if (rows[i].Line.Kind != LineKind.Value)
+            {
+                continue;
+            }
+            var top = rows[i].Top - lift;
+            var bottom = rows[i].Top + rows[i].Height - lift;
+            var firstOfRun = i == 0 || rows[i - 1].Line.Kind != LineKind.Value;
+            if (firstOfRun)
+            {
+                graphics.DrawLine(pen, left, top, right, top);
+            }
+            graphics.DrawLine(pen, left, bottom, right, bottom);
+            graphics.DrawLine(pen, left, top, left, bottom);
+            graphics.DrawLine(pen, right, top, right, bottom);
+            if (divider > left && divider < right)
+            {
+                graphics.DrawLine(pen, divider, top, divider, bottom);
+            }
         }
     }
 

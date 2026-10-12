@@ -64,6 +64,12 @@
     // BackgroundOnly = Hintergrund ohne Panel setzen (Standard), Skip = Wallpaper gar nicht anfassen
     "onExcluded": "BackgroundOnly"
   },
+  "border": {
+    "color": "#FFFFFF80",  // Rahmenfarbe (#RRGGBBAA)
+    "width": 0,            // Strichstaerke in Pixeln, 0 = kein Rahmen
+    "style": "Solid",      // Solid = Linie, Dotted = Punkte, Dashed = strichliert
+    "scope": "Panel"       // Panel = um das ganze Panel, Sections = je Abschnitt ein Kasten, Rows = Gitter um jede Zeile
+  },
   "format": {
     "date": "yyyy-MM-dd",           // reines Datum (z. B. BIOS-Datum): .NET-Format, etwa dd.MM.yyyy
     "dateTime": "yyyy-MM-dd HH:mm", // Datum mit Uhrzeit (letzter Boot, {now}, Dateidatum), etwa dd.MM.yyyy HH:mm
