@@ -71,6 +71,12 @@ public sealed class MainForm : Form
     private readonly SplitContainer _split = new() { Dock = DockStyle.Fill };
     private readonly ToolTip _tips = new() { AutoPopDelay = 30000, InitialDelay = 300, ReshowDelay = 100 };
     private readonly Label _previewCaption = new() { AutoSize = true, Margin = new Padding(3, 3, 3, 4) };
+    // Rechts neben der Ueberschrift der Vorschau, in Orange: dieser Rechner ist laut White-/Blacklist ausgeschlossen.
+    private readonly Label _previewHostNote = new()
+    {
+        AutoSize = false, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleRight, AutoEllipsis = true,
+        ForeColor = Color.FromArgb(214, 108, 0), Margin = new Padding(12, 3, 3, 4)
+    };
     // Erkannte Aufloesung und Skalierung des primaeren Monitors, fuer Titelleiste und Vorschau-Ueberschrift.
     private string _displayInfo = "";
     private TextBox _lastItemTextBox;
@@ -117,7 +123,13 @@ public sealed class MainForm : Form
         previews.RowStyles.Add(new RowStyle(SizeType.Percent, 45));
         previews.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         previews.RowStyles.Add(new RowStyle(SizeType.Percent, 55));
-        previews.Controls.Add(_previewCaption);
+        var captionRow = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 2, RowCount = 1, Margin = Padding.Empty };
+        captionRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        captionRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        captionRow.Controls.Add(_previewCaption);
+        captionRow.Controls.Add(_previewHostNote);
+        _previewHostNote.Font = new Font(Font, FontStyle.Bold);
+        previews.Controls.Add(captionRow);
         previews.Controls.Add(_preview);
         previews.Controls.Add(new Label { Text = "Info-Panel in Originalgröße", AutoSize = true, Margin = new Padding(3, 10, 3, 4) });
         previews.Controls.Add(_detail);
@@ -225,6 +237,12 @@ public sealed class MainForm : Form
         previewToggle.Checked = _previewEnabled;
         previewToggle.CheckedChanged += (_, _) => SetPreviewEnabled(previewToggle.Checked);
         bar.Items.Add(previewToggle);
+        // "100 %": das Panel so zeichnen wie ohne Windows-Skalierung - schaltet dafuer die beiden
+        // Einstellungen zusammen, die es sonst vergroessern (Skalierung mit der DPI, relative Breite).
+        _scaleToggle = Button("100 %", '\uE8A3', "Panel wie bei 100 % zeichnen: Windows-Skalierung und relative Breite gelten dann nicht.\r\nEntspricht im Reiter „Aussehen“: „Größe mit der Windows-Skalierung vergrößern“ aus, „Relative Breite“ aus.\r\nAusschalten stellt die vorherigen Werte wieder her.", () => { });
+        _scaleToggle.CheckOnClick = true;
+        _scaleToggle.CheckedChanged += (_, _) => SetUnscaled(_scaleToggle.Checked);
+        bar.Items.Add(_scaleToggle);
         bar.Items.Add(Button("Vorschau aktualisieren", '\uE72C', "Werte neu abfragen und Vorschau neu rendern", RenderPreview));
         bar.Items.Add(Button("Vorschau anzeigen", '\uE740', "Die aktuelle Darstellung als Vollbild zeigen – so, wie sie auf dem Desktop aussieht (Esc oder Klick schließt)", ShowFullscreenPreview));
         bar.Items.Add(Button("Jetzt anwenden", '\uE768', "Speichern und BGInfo-Reloaded.exe mit dieser Konfiguration ausführen", Apply));
@@ -1868,6 +1886,51 @@ public sealed class MainForm : Form
             load();
         }
         _loading = wasLoading;
+        SyncScaleToggle();
+    }
+
+    private ToolStripButton _scaleToggle = null!;
+    private bool _syncingScaleToggle;
+    // Werte vor dem Einschalten von "100 %", damit das Ausschalten sie zurueckholt.
+    private (bool ScaleWithDpi, int ScreenFraction) _scaledSettings = (true, 0);
+
+    private bool IsUnscaled => !_config.Panel.ScaleWithDpi && _config.Panel.ScreenFraction <= 0;
+
+    /// <summary>Der Schalter "100 %" zeigt immer den Zustand der Konfiguration.</summary>
+    private void SyncScaleToggle()
+    {
+        if (_scaleToggle == null)
+        {
+            return; // Leiste noch nicht aufgebaut
+        }
+        _syncingScaleToggle = true;
+        _scaleToggle.Checked = IsUnscaled;
+        _syncingScaleToggle = false;
+    }
+
+    private void SetUnscaled(bool unscaled)
+    {
+        if (_syncingScaleToggle || unscaled == IsUnscaled)
+        {
+            return;
+        }
+        if (unscaled)
+        {
+            _scaledSettings = (_config.Panel.ScaleWithDpi, _config.Panel.ScreenFraction);
+            _config.Panel.ScaleWithDpi = false;
+            _config.Panel.ScreenFraction = 0;
+            _status.Text = "100 %: Windows-Skalierung und relative Breite gelten für das Panel nicht mehr.";
+        }
+        else
+        {
+            // Stand vorher beides schon auf "aus" (z.B. so geladen), ist "mit Skalierung" der sinnvolle Gegenzustand.
+            var previous = _scaledSettings is { ScaleWithDpi: false, ScreenFraction: <= 0 } ? (true, 0) : _scaledSettings;
+            _config.Panel.ScaleWithDpi = previous.Item1;
+            _config.Panel.ScreenFraction = previous.Item2;
+            _status.Text = "100 % aus: das Panel folgt wieder der Windows-Skalierung bzw. der relativen Breite.";
+        }
+        ReloadControls();
+        Changed();
     }
 
     private void ShowConfig()
@@ -1882,6 +1945,7 @@ public sealed class MainForm : Form
     private void Changed()
     {
         _dirty = true;
+        SyncScaleToggle();
         UpdateTitle();
         SchedulePreview();
         ScheduleCurrentValues();
@@ -2337,7 +2401,7 @@ public sealed class MainForm : Form
 
         try
         {
-            var (note, panel) = await Task.Run(() =>
+            var (note, panel, hostNote) = await Task.Run(() =>
             {
                 var config = AppConfig.FromJson(json, "Editor");
                 config.BaseDirectory = baseDirectory;
@@ -2348,13 +2412,15 @@ public sealed class MainForm : Form
                 {
                     notes.Insert(0, includeNote);
                 }
-                var (text, rectangle) = RenderToFile(config, file);
-                return (notes.Count > 0 ? $"{text} – {string.Join(" – ", notes)}" : text, rectangle);
+                var (text, rectangle, host) = RenderToFile(config, file);
+                return (notes.Count > 0 ? $"{text} – {string.Join(" – ", notes)}" : text, rectangle, host);
             });
             if (generation != _previewGeneration)
             {
                 return; // inzwischen wurde weiter editiert, das neuere Bild folgt
             }
+            _previewHostNote.Text = hostNote;
+            _tips.SetToolTip(_previewHostNote, hostNote);
 
             Bitmap image;
             using (var stream = File.OpenRead(file))
@@ -2421,7 +2487,7 @@ public sealed class MainForm : Form
 
         try
         {
-            var (note, _) = await Task.Run(() =>
+            var (note, _, hostNote) = await Task.Run(() =>
             {
                 var config = AppConfig.FromJson(json, "Editor");
                 config.BaseDirectory = baseDirectory;
@@ -2429,6 +2495,10 @@ public sealed class MainForm : Form
                 config.ResolveHostFiles();
                 return RenderToFile(config, file, monitor);
             });
+            if (hostNote.Length > 0)
+            {
+                note += " – " + hostNote;
+            }
 
             Bitmap image;
             using (var stream = File.OpenRead(file))
@@ -2490,12 +2560,17 @@ public sealed class MainForm : Form
         }
     }
 
-    private static (string Note, Rectangle Panel) RenderToFile(AppConfig config, string file, MonitorTarget? target = null)
+    /// <summary>
+    /// Rendert die Vorschau. Das Panel wird immer gezeichnet - auch wenn dieser Rechner laut White-
+    /// oder Blacklist keins bekaeme: wer die Konfiguration auf einem ausgeschlossenen Rechner pflegt,
+    /// muss trotzdem sehen, was er einstellt. "HostNote" sagt dann, was die exe hier wirklich taete.
+    /// </summary>
+    private static (string Note, Rectangle Panel, string HostNote) RenderToFile(AppConfig config, string file, MonitorTarget? target = null)
     {
-        var monitor = target ?? WallpaperInterop.GetMonitors().First(m => m.IsPrimary);
+        var monitor = target ?? WallpaperInterop.GetMonitors().FirstOrDefault(m => m.IsPrimary) ?? WallpaperInterop.GetMonitors().First();
         var hostNames = new[] { Environment.MachineName, new ValueResolver().Expand("{fqdn}") };
         var allowed = config.Hosts.Allows(hostNames, out var reason);
-        var lines = allowed ? SystemInfoCollector.Collect(config) : new List<InfoLine>();
+        var lines = SystemInfoCollector.Collect(config);
 
         var image = ResolveBaseImage(config);
         if (image != null && config.Wallpaper.ResolutionVariants)
@@ -2518,13 +2593,11 @@ public sealed class MainForm : Form
                 ? $" ({size.Width} × {size.Height}) – ACHTUNG: Anpassung „Keine“, Windows skaliert und beschneidet das Bild samt Panel selbst; die Vorschau zeigt das nicht"
                 : $" ({size.Width} × {size.Height}) – Achtung: passt nicht zum Bildschirm, ein Teil des Bildes ist nicht zu sehen";
         }
-        if (!allowed)
-        {
-            note += config.Hosts.OnExcluded == ExcludedAction.Skip
-                ? $" – auf diesem Rechner würde nichts geändert ({reason})"
-                : $" – Panel auf diesem Rechner abgeschaltet ({reason})";
-        }
-        return (note, panel);
+        var hostNote = allowed ? ""
+            : $"Achtung: {Environment.MachineName} {reason} – " + (config.Hosts.OnExcluded == ExcludedAction.Skip
+                ? "BGInfo-Reloaded.exe ändert hier nichts. Die Vorschau zeigt das Panel trotzdem."
+                : "BGInfo-Reloaded.exe setzt hier nur den Hintergrund, ohne Panel. Die Vorschau zeigt das Panel trotzdem.");
+        return (note, panel, hostNote);
     }
 
     /// <summary>

@@ -98,6 +98,14 @@ The tabs and buttons (German labels in parentheses):
   double-click. For headings, blocks and “Nur wenn” only the placeholder is inserted; if the field
   is locked for the selected line (e.g. a spacer), a hint appears. Dragging onto the list of lines creates a new line where it is dropped (label = meaning,
   value = placeholder); dragging onto a text field inserts it there.
+- **100 % (toggle in the toolbar):** draws the panel as it would look without Windows scaling. It
+  switches off both “Größe mit der Windows-Skalierung vergrößern” (`panel.scaleWithDpi`) and
+  “Relative Breite” (`panel.screenFraction`); switching it off restores the previous values. The
+  background image itself is always rendered at the real pixel resolution of the monitor anyway.
+- **Excluded machine:** if the machine the editor runs on is on the blacklist (or not on the
+  whitelist), the preview still shows the panel. To the right of “Vorschau – ganzer Bildschirm” an
+  orange note then says that `BGInfo-Reloaded.exe` only sets the background here or changes nothing
+  (full text when the mouse points at it).
 - **Searching placeholders:** the field “Suchen” below “WMI-Abfrage…” filters the placeholder list
   while typing, across placeholder, meaning and value; several words must all occur. Esc or ✕ clears it.
 - **Preview (Vorschau, toggle in the toolbar):** shows or hides the preview area on the right; while

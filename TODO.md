@@ -226,5 +226,9 @@ WMI-Dialog, Anzeige von Blöcken und Filtern. Noch von Hand durchzuklicken:
       hervorgehobene Spaltenköpfe (exe: neutral/de/en/fr und Teilen geprüft; Editor per Bildschirmfoto)
 - [x] 2026-10-12 Version 2.12.0: Rahmen (`border`: Farbe, Stärke, Linie/Punkte/strichliert) um Panel,
       Abschnitte oder Zeilen; Editor: Reiter „Aussehen“ (alle drei Arten gerendert und angesehen)
+- [x] 2026-10-12 Version 2.13.0: Editor rendert die Vorschau auch auf einem per White-/Blacklist
+      ausgeschlossenen Rechner und weist in Orange darauf hin (Ursache der „leeren unteren Vorschau“)
+- [x] 2026-10-12 Version 2.13.0: Editor-Schalter „100 %“ – Panel ohne Windows-Skalierung und ohne
+      relative Breite zeichnen (schaltet `panel.scaleWithDpi` und `panel.screenFraction` zusammen)
 - [x] 2026-10-01 Rendering von SixLabors ImageSharp auf `System.Drawing.Common` (GDI+, MIT)
       umgestellt – Entscheidung Rendering-Bibliothek damit erledigt, kein Lizenzthema mehr
