@@ -1,0 +1,53 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Grafischer Editor fuer BGInfo-Reloaded.json. Wird NICHT auf die Zielrechner verteilt - dort laeuft nur
+       BGInfo-Reloaded.exe. Der Editor uebernimmt Konfigurationsmodell, Platzhalter und Renderer direkt
+       aus ..\src, damit Vorschau und echtes Ergebnis nicht auseinanderlaufen koennen. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>BGInfo-Reloaded-Editor</AssemblyName>
+    <RootNamespace>BgInfoReloaded.Editor</RootNamespace>
+
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <!-- Kulturdaten werden fuer format.culture gebraucht (Monatsnamen, Trennzeichen). Das Programm
+         stellt sich beim Start trotzdem auf die neutrale Kultur (ValueFormat.PinInvariantCulture),
+         damit ohne diese Einstellung alles aussieht wie bisher. -->
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <PublishTrimmed>false</PublishTrimmed>
+
+    <!-- Gleiche Versionsnummer wie BGInfo-Reloaded.csproj fuehren. -->
+    <Version>2.11.0</Version>
+    <FileVersion>2.11.0.0</FileVersion>
+    <Product>BGInfo-Reloaded Editor</Product>
+    <AssemblyTitle>BGInfo-Reloaded Editor</AssemblyTitle>
+    <ApplicationIcon>..\icons\BGInfo-Reloaded-Editor.ico</ApplicationIcon>
+    <Description>Grafischer Editor fuer die Konfigurationsdatei von BGInfo-Reloaded.</Description>
+  </PropertyGroup>
+
+  <!-- Keine .pdb neben der veroeffentlichten exe (wie in BGInfo-Reloaded.csproj). -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Alles ausser dem Einstiegspunkt der Kommandozeilen-App. -->
+    <Compile Include="..\src\*.cs" Exclude="..\src\Program.cs" LinkBase="Shared" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Drawing.Common" Version="10.0.12" />
+    <PackageReference Include="System.Management" Version="10.0.12" />
+    <PackageReference Include="Microsoft.Win32.Registry" Version="5.0.0" />
+  </ItemGroup>
+
+</Project>

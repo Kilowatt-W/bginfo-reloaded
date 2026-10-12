@@ -1,0 +1,26 @@
+# .NET Build-Artefakte
+bin/
+obj/
+publish/
+publish_tmp/
+*.pdb
+*.user
+*.exe
+
+# Lokale Testartefakte (Vorschaubilder, Ausgaben der Wallpaper-Laeufe)
+Output/
+Samples/
+vorschau.png
+
+# Konfliktkopien des Sync-Clients und Rest der alten Ordnerstruktur
+*SFConflict*
+bginfonative/
+
+# Editor/OS
+.vs/
+.vscode/
+*.suo
+.DS_Store
+Thumbs.db
+.claude/
+CLAUDE.local.md

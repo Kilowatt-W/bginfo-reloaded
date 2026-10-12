@@ -1,0 +1,135 @@
+// Beispiel-Konfiguration fuer BGInfo-Reloaded. Als "BGInfo-Reloaded.json" neben die exe legen, nach
+// %ProgramData%\BGInfo-Reloaded\ kopieren oder zentral bereitstellen und per
+//   BGInfo-Reloaded.exe --config \\fileserver.example.com\share\BGInfo-Reloaded.json   (bzw. https://...)
+// oder ueber die Umgebungsvariable BGINFORELOADED_CONFIG referenzieren.
+// Kommentare und abschliessende Kommas sind erlaubt. Alles Weggelassene behaelt den Standardwert.
+{
+  "version": "1.0",   // frei waehlbare Version dieser Datei, als {configversion} im Panel nutzbar
+  "description": "Beispielkonfiguration",   // eigene Anmerkungen; bleiben beim Speichern im Editor erhalten
+  "panel": {
+    // TopLeft, TopCenter, TopRight, MiddleLeft, Center, MiddleRight, BottomLeft, BottomCenter, BottomRight
+    "position": "BottomRight",
+    "margin": 40,
+    "padding": 22,
+    "screenFraction": 0, // Panelbreite als Bruchteil der Bildschirmbreite: 3 bis 8 = 1/3 bis 1/8, Inhalt wird passend skaliert; 0 = aus
+    "width": 0,        // feste Panelbreite in Pixeln, 0 = automatisch an den laengsten Eintrag anpassen
+    "labelShare": 0,   // Anteil der Bezeichnungsspalte an der Panelbreite in Prozent (10 bis 90), 0 = automatisch
+    "labelWidth": 0,   // Breite der Bezeichnungsspalte in Pixeln, 0 = automatisch an das laengste Label anpassen
+    "columnGap": 24,   // Abstand zwischen Bezeichnung und Wert bei automatischer Spaltenbreite
+    "textOverflow": "Truncate", // zu lange Texte bei fester Breite: Truncate = mit ... abschneiden, Wrap = in der Spalte umbrechen
+    "background": "#0C0E12A5", // #RRGGBBAA - AA ist die Deckkraft
+    "cornerRadius": 14,        // abgerundete Ecken des Panel-Hintergrunds, 0 = eckig
+    "shadowSize": 18,          // Schlagschatten: so weit schaut er rechts unten hervor, 0 = ohne
+    "shadowColor": "#00000055", // Schattenfarbe (#RRGGBBAA), laeuft am Rand weich aus
+    "avoidTaskbar": true,      // Abstand ab dem Arbeitsbereich: Panel beginnt ueber/neben der Taskleiste
+    "scaleWithDpi": true       // Masse und Schrift mit der Windows-Skalierung vergroessern (nur bei fit = Fill)
+  },
+  "font": { "family": "Segoe UI", "size": 15, "headerSize": 19 },
+  "colors": { "header": "#FFD700", "label": "#FFFFFF", "value": "#82DCD2" },
+  "wallpaper": {
+    // Festes Hintergrundbild statt des aktuellen Benutzer-Wallpapers (Zeile entfernen = Wallpaper des
+    // Benutzers). Ein relativer Pfad gilt relativ zum Ordner dieser Konfigurationsdatei, z.B. auch
+    // "\\\\fileserver.example.com\\share\\wallpaper.jpg". Hier: die mitgelieferten Demo-Hintergruende im Ordner
+    // "backgrounds" - dort liegen nur Dateien je Aufloesung (background_1920x1080.jpg usw.), ein
+    // "background.jpg" selbst muss es dann nicht geben.
+    "path": ".\\backgrounds\\background.jpg",
+    // Wie das Bild auf die Monitoraufloesung gebracht wird:
+    //   Fill = ausfuellen, mittig beschnitten (Standard)   Fit = ganzes Bild, Raender in backgroundColor
+    //   Stretch = dehnen   Center = unskaliert zentriert   Tile = kacheln
+    //   None = Originalgroesse beschriften, Windows skaliert Bild samt Panel
+    "fit": "Fill",
+    // true (Standard): je Monitor zuerst "wallpaper_3440x1440.jpg" (auch -3440x1440 / 3440x1440 ohne
+    // Trenner) suchen, sonst das Bild ohne Zusatz nehmen
+    "resolutionVariants": true,
+    "backgroundColor": "#101218"
+  },
+  "monitors": {
+    // PerMonitor = je Monitor ein eigenes Bild in dessen Aufloesung (Standard)
+    // Single     = ein Bild fuer den primaeren Monitor, Windows zeigt es auf allen
+    "mode": "PerMonitor",
+    // All = Info-Panel auf jedem Monitor, Primary = nur einmal auf dem primaeren (nur bei PerMonitor)
+    "panel": "All"
+  },
+  "hosts": {
+    // Computernamen mit * (beliebig viele Zeichen) und ? (genau ein Zeichen), Gross-/Kleinschreibung egal -
+    // oder IP-Angaben: Adresse (10.10.1.5), Netz (10.10.0.0/16), Bereich (10.10.1.10-10.10.1.50, kurz 10.10.1.10-50).
+    // include (Whitelist): wenn nicht leer, erscheint das Panel nur auf passenden Rechnern.
+    // exclude (Blacklist): auf passenden Rechnern erscheint das Panel nicht - hat Vorrang vor include.
+    "include": [],
+    "exclude": [],   // z.B. ["KIOSK-*", "PC-0??", "*.dmz.firma.local", "10.10.99.0/24", "10.10.1.10-10.10.1.50"]
+    // Zusaetzlich oder stattdessen je Liste eine zentral gepflegte Textdatei (ein Eintrag je Zeile; Pfad, UNC
+    // oder URL, relativ zum Ordner dieser Datei) - wird bei jedem Lauf frisch gelesen:
+    // "includeFile": "\\\\fileserver.example.com\\share\\bginfo\\allowed_hosts.txt",
+    // "excludeFile": "\\\\fileserver.example.com\\share\\bginfo\\disallowed_hosts.txt",
+    // BackgroundOnly = Hintergrund ohne Panel setzen (Standard), Skip = Wallpaper gar nicht anfassen
+    "onExcluded": "BackgroundOnly"
+  },
+  "format": {
+    "date": "yyyy-MM-dd",           // reines Datum (z. B. BIOS-Datum): .NET-Format, etwa dd.MM.yyyy
+    "dateTime": "yyyy-MM-dd HH:mm", // Datum mit Uhrzeit (letzter Boot, {now}, Dateidatum), etwa dd.MM.yyyy HH:mm
+    "decimals": 1                   // hoechstens so viele Nachkommastellen bei Groessen und Geschwindigkeiten
+    // , "culture": "de-DE"         // Trennzeichen, Monats- und Tagesnamen; system = wie Windows; weglassen = neutral
+  },
+  "update": {
+    // Selbst-Update aus einem Ordner (lokal oder UNC, relativ zum Ordner dieser Datei): liegt dort eine
+    // BGInfo-Reloaded.exe mit hoeherer Version, ersetzt sich das Programm selbst. Zeile "path" weglassen = aus.
+    // "path": "\\\\fileserver.example.com\\share\\BGInfo-Reloaded",
+    "auto": false,        // true = bei jedem Lauf pruefen, false = nur mit BGInfo-Reloaded.exe --update
+    "program": true,      // BGInfo-Reloaded.exe holen, wenn im Ordner eine hoehere Version liegt
+    "editor": true,       // BGInfo-Reloaded-Editor.exe ebenso - nur wo der Editor schon neben der exe liegt
+    "config": false,      // BGInfo-Reloaded.json holen, wenn im Ordner neuer (vorherige bleibt als .bak)
+    "backgrounds": false  // background*.* und Unterordner backgrounds\ holen (neuere und fehlende Dateien)
+    // Statt eines Ordners ein GitHub-Repository fuer --update (nur auf Aufruf, nur die exe):
+    // , "repo": "Kilowatt-W/bginfo-reloaded"
+  },
+  // Optional: zentrale Datei (Pfad, UNC oder URL; relativ zum Ordner dieser Datei) mit gemeinsam
+  // genutzten "fields" und "items" - siehe BGInfo-Reloaded.central.sample.json. Ihre Zeilen erscheinen
+  // dort, wo unten { "includeItems": true } steht.
+  // "include": "\\\\fileserver.example.com\\share\\BGInfo-Reloaded.central.json",
+
+  // Eigene, benannte Platzhalter: einmal definieren, in beliebig vielen Zeilen als {name} benutzen.
+  "fields": {
+    "modell": "{wmi:SELECT Model FROM Win32_ComputerSystem}",
+    "betriebssystem": "{os} {displayversion} (Build {build})"
+  },
+  "items": [
+    { "section": "{hostname}" },
+    { "label": "Benutzer", "value": "{user}" },
+    { "label": "IPv4", "value": "{ipv4}" },
+    { "label": "Subnetzmaske", "value": "{subnet}" },
+    { "label": "Betriebssystem", "value": "{betriebssystem}" },
+    { "label": "Letzter Boot", "value": "{boot}" },
+    { "label": "Laufzeit", "value": "{uptime}" },
+    { "spacer": true },
+
+    { "section": "HARDWARE" },
+    { "label": "Modell", "value": "{manufacturer} {model}" },
+    { "label": "Seriennummer", "value": "{serial}" },
+    { "label": "CPU", "value": "{cpu} ({cores} Kerne)" },
+    { "label": "RAM", "value": "{ram}" },
+    { "drives": true, "label": "Laufwerk {drive}", "value": "{free} GB frei von {total} GB ({percent} % belegt)" },
+    { "spacer": true },
+
+    { "section": "UMGEBUNG" },
+    // Generische Quellen - damit laesst sich das Panel ohne Neubau der exe erweitern.
+    // Alle Platzhalter mit aktuellen Werten: BGInfo-Reloaded.exe --list-tags
+    { "label": "Standort", "value": "{env:SITE}", "hideIfEmpty": true },
+    { "label": "Logon-Server", "value": "{env:LOGONSERVER}", "hideIfEmpty": true },
+    { "label": "Registrierter Besitzer", "value": "{reg:HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\RegisteredOwner}", "hideIfEmpty": true },
+    { "label": "Zeitzone", "value": "{wmi:Win32_TimeZone.Caption}" },
+    { "label": "DNS-Server", "value": "{wmi:Win32_NetworkAdapterConfiguration.DNSServerSearchOrder where IPEnabled=true}", "split": ", " },   // split: je Teil eine eigene Zeile
+    { "label": "Asset-Tag", "value": "{file:%ProgramData%\\Firma\\asset.txt}", "hideIfEmpty": true },
+    // Filter (fuer jede Art von Eintrag, alle angegebenen muessen zutreffen):
+    //   onlyOn / notOn = Muster fuer Rechnernamen, when = Bedingung mit Platzhaltern
+    { "label": "Rolle", "value": "{systemtype}", "when": "{systemtype} != Workstation" },
+    { "label": "DHCP-Server", "value": "{dhcp}", "notOn": ["SRV-*"], "hideIfEmpty": true },
+    // Block: der Inhalt bis "endBlock" erscheint nur, wenn der Filter des Blockanfangs zutrifft
+    // (onlyOn / notOn / when) - hier nur auf echter Hardware, nicht auf virtuellen Maschinen.
+    { "block": "Blech", "when": "{virtual} = nein" },
+      { "label": "Bauform", "value": "{chassis}" },
+      { "label": "BIOS-Datum", "value": "{biosdate}" },
+    { "endBlock": true },
+    // { "includeItems": true },   // hier die Zeilen der zentralen Datei einfuegen
+    { "label": "Stand", "value": "{now:dd.MM.yyyy HH:mm}" }
+  ]
+}

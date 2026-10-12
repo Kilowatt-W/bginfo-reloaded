@@ -1,0 +1,25 @@
+// Beispiel fuer eine zentrale Datei, die andere Konfigurationen per
+//   "include": "\\\\fileserver.example.com\\share\\BGInfo-Reloaded.central.json"
+// einbinden. Uebernommen werden nur "fields" und "items" - Aussehen, Hintergrund usw. bleiben Sache
+// der einbindenden Datei. Die Datei wird bei jedem Lauf gelesen und lokal zwischengespeichert.
+{
+  // Benannte Platzhalter, die in jeder einbindenden Konfiguration als {name} verfuegbar sind.
+  // Definiert die einbindende Datei ein Feld gleichen Namens, gewinnt deren Definition.
+  "fields": {
+    "modell": "{wmi:SELECT Model FROM Win32_ComputerSystem}",
+    "dnsserver": "{wmi:Win32_NetworkAdapterConfiguration.DNSServerSearchOrder where IPEnabled=true}",
+    "standort": "{reg:HKLM\\SOFTWARE\\Firma\\Standort}",
+    "support": "IT-Hotline 1234"
+  },
+
+  // Zeilen, die dort erscheinen, wo die einbindende Datei { "includeItems": true } stehen hat.
+  // Filter: onlyOn / notOn (Muster fuer Rechnernamen), when (Bedingung mit Platzhaltern).
+  "items": [
+    { "section": "FIRMA" },
+    { "label": "Standort", "value": "{standort}", "hideIfEmpty": true },
+    { "label": "Support", "value": "{support}" },
+    { "label": "Rolle", "value": "{systemtype}", "when": "{systemtype} != Workstation" },
+    { "label": "DNS-Server", "value": "{dnsserver}", "onlyOn": ["SRV-*", "*-DC??"] },
+    { "label": "Hinweis", "value": "Testsystem - keine Produktivdaten", "onlyOn": ["TEST-*"], "notOn": ["TEST-PROD-*"] }
+  ]
+}

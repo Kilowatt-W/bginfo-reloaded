@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- WinExe statt Exe: kein aufblitzendes Konsolenfenster, wenn der Scheduled Task die exe in der
+         Benutzersitzung startet. Die CLI-Ausgabe haengt sich per AttachConsole an die aufrufende
+         Konsole (siehe Program.cs). -->
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>BGInfo-Reloaded</AssemblyName>
+    <RootNamespace>BgInfoReloaded</RootNamespace>
+
+    <!-- Cross-Publish-Ziel: eigenstaendige Windows-exe, keine .NET-Installation auf dem Zielrechner noetig -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <!-- Kulturdaten werden fuer format.culture gebraucht (Monatsnamen, Trennzeichen). Das Programm
+         stellt sich beim Start trotzdem auf die neutrale Kultur (ValueFormat.PinInvariantCulture),
+         damit ohne diese Einstellung alles aussieht wie bisher. -->
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <PublishTrimmed>false</PublishTrimmed>
+
+    <Version>2.11.0</Version>
+    <FileVersion>2.11.0.0</FileVersion>
+    <Product>BGInfo-Reloaded</Product>
+    <AssemblyTitle>BGInfo-Reloaded</AssemblyTitle>
+    <Description>Eigenstaendiger, quelloffener BGInfo-Ersatz ohne PowerShell- oder Installer-Abhaengigkeit.</Description>
+    <ApplicationIcon>..\icons\BGInfo-Reloaded.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <!-- Keine .pdb neben der veroeffentlichten exe: Debug-Symbole werden zum Betrieb nicht gebraucht
+       und sollen nicht versehentlich mit verteilt werden. Debug-Builds behalten ihre Symbole. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Drawing.Common" Version="10.0.12" />
+    <PackageReference Include="System.Management" Version="10.0.12" />
+    <PackageReference Include="Microsoft.Win32.Registry" Version="5.0.0" />
+  </ItemGroup>
+
+</Project>
