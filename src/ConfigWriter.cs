@@ -49,6 +49,9 @@ internal static class ConfigWriter
         ["colors.header"] = "Überschriften",
         ["colors.label"] = "Bezeichnungen",
         ["colors.value"] = "Werte",
+        ["colors.barUsed"] = "Balken (\"bar\" einer Zeile): belegter Teil",
+        ["colors.barFree"] = "Balken: freier Teil",
+        ["panel.barHeight"] = "Höhe der Balken in Pixeln",
         ["wallpaper.path"] = "festes Hintergrundbild; relativ zum Ordner dieser Datei; weglassen = Wallpaper des Benutzers",
         ["wallpaper.originalPath"] = "nur zur Information: von hier wurde das Bild beim ersten Start übernommen",
         ["wallpaper.byResolution"] = "eigene Zuordnung je Auflösung, z. B. {\"3440x1440\": \".\\\\backgrounds\\\\breit.jpg\"} - hat Vorrang vor bild_3440x1440.jpg",
@@ -93,6 +96,7 @@ internal static class ConfigWriter
             "\"label\"/\"value\" (normale Zeile, \"hideIfEmpty\" lässt sie bei leerem Wert weg), \"includeItems\" (Zeilen der zentralen Datei).",
             "Filter für jeden Eintrag: \"onlyOn\" / \"notOn\" (Rechnernamen-Muster oder IP-Angaben wie bei hosts), \"when\" (Bedingung mit Platzhaltern).",
             "\"split\" teilt den Wert an Trennzeichen in mehrere Zeilen untereinander, z. B. \", \" bei mehreren Grafikkarten (mehrere mit | getrennt).",
+            "\"bar\" zeichnet einen Balken aus einem Prozentwert: \"{percent}\" bei \"drives\", \"{rampercent}\", \"{battery}\" - mit Text darunter, ohne Text statt des Werts.",
             "Block: { \"block\": \"Name\", \"when\": \"{virtual} = nein\" } ... { \"endBlock\": true } - der Inhalt erscheint nur, wenn der Filter zutrifft.",
             "Platzhalter mit aktuellen Werten: BGInfo-Reloaded.exe --list-tags   Kürzen: {cpu,30}  {cpu,30...}  {serial,-8}"
         }

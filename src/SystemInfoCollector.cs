@@ -11,7 +11,8 @@ public enum LineKind
     Value
 }
 
-public sealed record InfoLine(LineKind Kind, string Label, string Value = "");
+/// <param name="Bar">Balken unter bzw. statt des Werts: Anteil 0 bis 1 (belegt), null = kein Balken.</param>
+public sealed record InfoLine(LineKind Kind, string Label, string Value = "", double? Bar = null);
 
 /// <summary>
 /// Baut aus den "items" der Konfiguration die fertigen Panel-Zeilen. Die eigentlichen Werte kommen
@@ -79,7 +80,7 @@ public static class SystemInfoCollector
                 {
                     continue;
                 }
-                AddSplit(lines, resolver.Expand(item.Label), value, item.Split);
+                AddSplit(lines, resolver.Expand(item.Label), value, item.Split, ParseBar(resolver.Expand(item.Bar)));
             }
         }
 
@@ -105,14 +106,34 @@ public static class SystemInfoCollector
         return parts.Length > 0 ? parts : new[] { value };
     }
 
-    /// <summary>Eine Zeile je Teil: der erste mit der Bezeichnung, die weiteren darunter ohne.</summary>
-    private static void AddSplit(List<InfoLine> lines, string label, string value, string? split)
+    /// <summary>Eine Zeile je Teil: der erste mit der Bezeichnung, die weiteren darunter ohne. Ein Balken haengt an der letzten.</summary>
+    private static void AddSplit(List<InfoLine> lines, string label, string value, string? split, double? bar = null)
     {
         var parts = SplitValue(value, split);
         for (var i = 0; i < parts.Count; i++)
         {
-            lines.Add(new InfoLine(LineKind.Value, i == 0 ? label : "", parts[i]));
+            lines.Add(new InfoLine(LineKind.Value, i == 0 ? label : "", parts[i], i == parts.Count - 1 ? bar : null));
         }
+    }
+
+    /// <summary>
+    /// Liest aus einem aufgeloesten Text den Prozentwert fuer einen Balken ("45", "45 %", "45,3 %") und
+    /// liefert den Anteil 0 bis 1. Null, wenn kein Balken gewuenscht ist oder keine Zahl darin steht
+    /// (z.B. "n/a" auf einem Rechner ohne Akku) - dann erscheint die Zeile ohne Balken.
+    /// </summary>
+    public static double? ParseBar(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+        var match = System.Text.RegularExpressions.Regex.Match(text, @"-?\d+(?:[.,]\d+)?");
+        if (!match.Success || !double.TryParse(match.Value.Replace(',', '.'), System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var percent))
+        {
+            return null;
+        }
+        return Math.Clamp(percent, 0, 100) / 100.0;
     }
 
     /// <summary>Treffen alle Filter des Eintrags (onlyOn, notOn, when) auf diesen Rechner zu?</summary>
@@ -174,7 +195,8 @@ public static class SystemInfoCollector
             AddSplit(result,
                 resolver.Expand(FormatDrive(drive, item.Label ?? DefaultDriveLabel)),
                 resolver.Expand(FormatDrive(drive, item.Value ?? DefaultDriveValue)),
-                item.Split);
+                item.Split,
+                string.IsNullOrWhiteSpace(item.Bar) ? null : ParseBar(resolver.Expand(FormatDrive(drive, item.Bar))));
         }
         return result;
     }

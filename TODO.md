@@ -245,5 +245,9 @@ WMI-Dialog, Anzeige von Blöcken und Filtern. Noch von Hand durchzuklicken:
       Editor: Gruppentabelle im Reiter „Rechner“ (exe: neun Fälle geprüft, Editor: Tabelle per Bildschirmfoto)
 - [x] 2026-10-13 Version 2.15.0: fehlt das Bild ohne Auflösung im Namen, gilt die Fassung mit 1920x1080 im Namen
       als Standardbild; der Editor sagt bei der Auswahl, welche Datei als Standard gilt
+- [x] 2026-10-13 Version 2.16.0: Balken für Prozentwerte (`bar` je Zeile, `colors.barUsed`/`barFree`,
+      `panel.barHeight`) – Laufwerke, RAM, Akku; mit Text darunter, ohne Text statt des Werts (drei Fälle gerendert)
+- [x] 2026-10-13 Version 2.16.0: die ausgewählte Bilddatei gilt immer als Standardbild, auch mit Auflösung im
+      Namen; der Editor trägt sie unverändert ein (vorher: Name ohne Auflösung, in der Liste rot „fehlt“)
 - [x] 2026-10-01 Rendering von SixLabors ImageSharp auf `System.Drawing.Common` (GDI+, MIT)
       umgestellt – Entscheidung Rendering-Bibliothek damit erledigt, kein Lizenzthema mehr

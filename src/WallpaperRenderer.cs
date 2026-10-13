@@ -32,6 +32,8 @@ public static class WallpaperRenderer
         var headerColor = ParseColor(config.Colors.Header, "colors.header");
         var labelColor = ParseColor(config.Colors.Label, "colors.label");
         var valueColor = ParseColor(config.Colors.Value, "colors.value");
+        var barUsedColor = ParseColor(config.Colors.BarUsed, "colors.barUsed");
+        var barFreeColor = ParseColor(config.Colors.BarFree, "colors.barFree");
 
         var toScreen = config.Wallpaper.Fit != WallpaperFit.None;
         using Bitmap image = toScreen
@@ -101,10 +103,18 @@ public static class WallpaperRenderer
                 Gap = (int)Math.Round(Math.Max(0, panel.ColumnGap) * scale),
                 ValueLineHeight = (int)Math.Round(fontSize * 1.67f),
                 SectionHeaderHeight = (int)Math.Round(headerSize * 1.9f),
-                SpacerHeight = (int)Math.Round(SectionSpacerHeight * scale)
+                SpacerHeight = (int)Math.Round(SectionSpacerHeight * scale),
+                BarHeight = Math.Max(2, (int)Math.Round(Math.Max(1, panel.BarHeight) * scale)),
+                BarGap = (int)Math.Round(fontSize * 0.35f),
+                FontSize = fontSize
             };
             layout.MaxLabel = valueLines.Select(l => MeasureWidth(l.Label, layout.LabelFont)).DefaultIfEmpty(0).Max();
             layout.MaxValue = valueLines.Select(l => MeasureWidth(l.Value, layout.ValueFont)).DefaultIfEmpty(0).Max();
+            // Ein Balken braucht Breite, auch wenn daneben kein oder nur kurzer Text steht.
+            if (valueLines.Any(l => l.Bar != null))
+            {
+                layout.MaxValue = Math.Max(layout.MaxValue, 180f * scale);
+            }
             var headerWidth = sectionLines.Select(l => MeasureWidth(l.Label, layout.HeaderFont)).DefaultIfEmpty(0).Max();
 
             float inner;
@@ -263,7 +273,16 @@ public static class WallpaperRenderer
                 else
                 {
                     DrawTextIfAny(line.Label, layout.LabelFont, labelBrush, panelX + padding, y, labelSpace, height);
-                    DrawTextIfAny(line.Value, layout.ValueFont, valueBrush, panelX + padding + labelColumnWidth, y, valueSpace, height);
+                    // Der Text bekommt nur die Hoehe ueber dem Balken, sonst liefe ein Umbruch in ihn hinein.
+                    DrawTextIfAny(line.Value, layout.ValueFont, valueBrush, panelX + padding + labelColumnWidth, y, valueSpace, height - layout.BarBlock(line));
+                    if (line.Bar is { } barFraction && valueSpace > 0)
+                    {
+                        // Mit Text: unter dem Text, im Zeilenabstand. Ohne Text: auf Hoehe der Schrift der Bezeichnung.
+                        var barTop = layout.BarBlock(line) > 0
+                            ? y + height - layout.BarBlock(line) - (int)Math.Round(layout.FontSize * 0.25f)
+                            : y + (int)Math.Round((layout.FontSize * 1.3f - layout.BarHeight) / 2f);
+                        DrawBar(graphics, panelX + padding + labelColumnWidth, barTop, valueSpace, layout.BarHeight, barFraction, barUsedColor, barFreeColor);
+                    }
                 }
                 y += height;
             }
@@ -278,6 +297,36 @@ public static class WallpaperRenderer
         {
             layout.Dispose();
         }
+    }
+
+    /// <summary>
+    /// Balken mit runden Enden: die ganze Laenge in der Farbe "frei", davon der Anteil
+    /// <paramref name="fraction"/> (0 bis 1) von links in der Farbe "belegt".
+    /// </summary>
+    private static void DrawBar(Graphics graphics, int x, int y, int width, int height, double fraction, Color used, Color free)
+    {
+        var radius = height / 2;
+        using (var freeBrush = new SolidBrush(free))
+        using (var whole = RoundedRectangle(x, y, width, height, radius))
+        {
+            graphics.FillPath(freeBrush, whole);
+        }
+        var usedWidth = (int)Math.Round(width * Math.Clamp(fraction, 0, 1));
+        if (usedWidth <= 0)
+        {
+            return;
+        }
+        // Auf die Form des ganzen Balkens beschneiden: so bleibt das linke Ende rund und ein fast
+        // voller Balken laeuft sauber in das rechte Ende.
+        using var usedBrush = new SolidBrush(used);
+        using var clip = RoundedRectangle(x, y, width, height, radius);
+        var state = graphics.Save();
+        graphics.SetClip(clip, CombineMode.Intersect);
+        using (var part = RoundedRectangle(x, y, Math.Max(usedWidth, height), height, radius))
+        {
+            graphics.FillPath(usedBrush, part);
+        }
+        graphics.Restore(state);
     }
 
     /// <summary>
@@ -385,6 +434,13 @@ public static class WallpaperRenderer
         public int ValueLineHeight;
         public int SectionHeaderHeight;
         public int SpacerHeight;
+        public int BarHeight;
+        public int BarGap;
+        public float FontSize;
+
+        /// <summary>Zusaetzliche Hoehe einer Zeile fuer einen Balken unter dem Text; ein Balken ohne Text braucht keine.</summary>
+        public int BarBlock(InfoLine line) =>
+            line.Kind == LineKind.Value && line.Bar != null && !string.IsNullOrWhiteSpace(line.Value) ? BarHeight + BarGap : 0;
         public float MaxLabel;
         public float MaxValue;
         public int NaturalWidth;
@@ -392,7 +448,7 @@ public static class WallpaperRenderer
 
         public int LineHeight(InfoLine line) => line.Kind == LineKind.Section
             ? (string.IsNullOrEmpty(line.Label) ? SpacerHeight : SectionHeaderHeight)
-            : ValueLineHeight;
+            : ValueLineHeight + BarBlock(line);
 
         public void Dispose()
         {

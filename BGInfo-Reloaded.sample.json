@@ -25,7 +25,7 @@
     "scaleWithDpi": true       // Masse und Schrift mit der Windows-Skalierung vergroessern (nur bei fit = Fill)
   },
   "font": { "family": "Segoe UI", "size": 15, "headerSize": 19 },
-  "colors": { "header": "#FFD700", "label": "#FFFFFF", "value": "#82DCD2" },
+  "colors": { "header": "#FFD700", "label": "#FFFFFF", "value": "#82DCD2", "barUsed": "#FFD700", "barFree": "#FFFFFF30" },   // barUsed/barFree: Balken ("bar" einer Zeile)
   "wallpaper": {
     // Festes Hintergrundbild statt des aktuellen Benutzer-Wallpapers (Zeile entfernen = Wallpaper des
     // Benutzers). Ein relativer Pfad gilt relativ zum Ordner dieser Konfigurationsdatei, z.B. auch
@@ -116,7 +116,7 @@
     { "label": "Seriennummer", "value": "{serial}" },
     { "label": "CPU", "value": "{cpu} ({cores} Kerne)" },
     { "label": "RAM", "value": "{ram}" },
-    { "drives": true, "label": "Laufwerk {drive}", "value": "{free} GB frei von {total} GB ({percent} % belegt)" },
+    { "drives": true, "label": "Laufwerk {drive}", "value": "{free} GB frei von {total} GB ({percent} % belegt)", "bar": "{percent}" },   // bar: Balken aus einem Prozentwert
     { "spacer": true },
 
     { "section": "UMGEBUNG" },

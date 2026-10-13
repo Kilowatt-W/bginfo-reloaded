@@ -176,10 +176,15 @@ public static class WallpaperState
         }
     }
 
-    /// <summary>Alle Dateien "bild_BxH.ext" (auch mit "-" oder ohne Trenner) neben dem Bild, mit ihrer Aufloesung.</summary>
+    /// <summary>
+    /// Alle Dateien "bild_BxH.ext" (auch mit "-" oder ohne Trenner) neben dem Bild, mit ihrer Aufloesung.
+    /// Traegt das angegebene Bild selbst schon eine Aufloesung im Namen ("bild_3840x2160.jpg"), wird
+    /// unter dem Namen ohne sie gesucht - es gehoert dann selbst zu den Fassungen.
+    /// </summary>
     private static List<(string Path, int Width, int Height)> FindResolutionVariants(string imagePath)
     {
         var result = new List<(string, int, int)>();
+        imagePath = StripResolutionSuffix(imagePath);
         try
         {
             var directory = Path.GetDirectoryName(imagePath);
@@ -223,14 +228,20 @@ public static class WallpaperState
     public const int DefaultHeight = 1080;
 
     /// <summary>
-    /// Das Standardbild zu einem Bildnamen: die Datei ohne Aufloesung im Namen, sonst die Fassung mit
-    /// 1920x1080 im Namen. Null, wenn es keins von beiden gibt.
+    /// Das Standardbild zu einem Bildnamen: zuerst die angegebene Datei selbst (auch wenn sie eine
+    /// Aufloesung im Namen traegt - was ausgewaehlt wurde, gilt), sonst die Datei ohne Aufloesung im
+    /// Namen, sonst die Fassung mit 1920x1080 im Namen. Null, wenn es keins davon gibt.
     /// </summary>
     public static string? FindDefaultImage(string imagePath)
     {
         if (File.Exists(imagePath))
         {
             return imagePath;
+        }
+        var plain = StripResolutionSuffix(imagePath);
+        if (File.Exists(plain))
+        {
+            return plain;
         }
         var standard = FindResolutionVariants(imagePath).FirstOrDefault(v => v.Width == DefaultWidth && v.Height == DefaultHeight);
         return standard.Path;
@@ -269,9 +280,15 @@ public static class WallpaperState
         {
             return exact.Path;
         }
+        // Das angegebene Bild ist das Standardbild - auch wenn es selbst eine Aufloesung im Namen traegt.
         if (File.Exists(imagePath) || variants.Count == 0)
         {
             return imagePath;
+        }
+        var plain = StripResolutionSuffix(imagePath);
+        if (File.Exists(plain))
+        {
+            return plain;
         }
         // Kein Bild ohne Zusatz: dann ist die Fassung in der Standardaufloesung das Standardbild.
         var standard = variants.FirstOrDefault(v => v.Width == DefaultWidth && v.Height == DefaultHeight);

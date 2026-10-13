@@ -428,11 +428,11 @@ static class EntryPoint
                 // Mit Standardbild, aber ohne Treffer: es gibt nur Bilder fuer andere Aufloesungen bzw. gar keins.
                 imageNote = baseImage == null
                     ? ", ohne Hintergrundbild"
-                    : $", ohne Hintergrundbild (weder {Path.GetFileNameWithoutExtension(baseImage)}_{size}{Path.GetExtension(baseImage)} noch {Path.GetFileName(baseImage)} vorhanden)";
+                    : $", ohne Hintergrundbild (weder {Path.GetFileNameWithoutExtension(WallpaperState.StripResolutionSuffix(baseImage))}_{size}{Path.GetExtension(baseImage)} noch {Path.GetFileName(baseImage)} vorhanden)";
             }
             else
             {
-                var wanted = baseImage == null ? "" : $"{Path.GetFileNameWithoutExtension(baseImage)}_{size}{Path.GetExtension(baseImage)}";
+                var wanted = baseImage == null ? "" : $"{Path.GetFileNameWithoutExtension(WallpaperState.StripResolutionSuffix(baseImage))}_{size}{Path.GetExtension(baseImage)}";
                 imageNote = $", Hintergrund {Path.GetFileName(image)} " + choice switch
                 {
                     WallpaperChoice.Override => $"(eigene Zuordnung fuer {size} aus wallpaper.byResolution)",

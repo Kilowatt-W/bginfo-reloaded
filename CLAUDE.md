@@ -86,6 +86,8 @@ echtes Windows nötig, das in dieser Entwicklungsumgebung nicht zur Verfügung s
   Rechteck zeichnen – so werden sie mit „…“ gekürzt statt über das Panel hinauszulaufen. Mit
   `panel.textOverflow = Wrap` wird stattdessen umbrochen; die Höhe jeder Zeile steht dann in
   `rowHeights` (nicht mehr `layout.LineHeight` allein). Bei `screenFraction` wird nie umbrochen.
+  Balken (`bar` einer Zeile, `InfoLine.Bar`, `DrawBar`): mit Text kommt die Höhe über
+  `PanelLayout.BarBlock` zur Zeile dazu, ohne Text nicht – deshalb steckt sie in `LineHeight`.
   Rahmen (`border`, `DrawBorders`) liegen absichtlich im vorhandenen Innen- und Zeilenabstand und
   verändern die Maße des Panels nicht – sie richten sich nach den tatsächlich gezeichneten Zeilen.
 - **TargetFramework ist `net8.0-windows`**, nicht `net8.0` – das schaltet den
@@ -185,8 +187,10 @@ echtes Windows nötig, das in dieser Entwicklungsumgebung nicht zur Verfügung s
   mehrere Optionen haben Standardwerte ungleich `false`/0/erster Enum-Wert; mit `WhenWritingDefault`
   ginge z.B. `scaleWithDpi: false` oder `fit: None` beim Speichern verloren.
 - **Welches Bild ein Monitor bekommt**, entscheidet allein `AppConfig.ResolveWallpaperFor` (eigene
-  Zuordnung aus `wallpaper.byResolution`, dann Datei mit Auflösung im Namen, dann Standardbild (Datei
-  ohne Auflösung im Namen, sonst die Fassung mit 1920x1080 – `WallpaperState.FindDefaultImage`), dann
+  Zuordnung aus `wallpaper.byResolution`, dann Datei mit Auflösung im Namen, dann Standardbild (die
+  eingetragene Datei selbst – auch mit Auflösung im Namen; sonst die Datei ohne Auflösung, sonst die
+  Fassung mit 1920x1080 – `WallpaperState.FindDefaultImage`; gesucht wird immer unter dem Namen ohne
+  Auflösung, `StripResolutionSuffix`), dann
   am besten passende Fassung) – exe, Editor-Vorschau und die Liste im Editor fragen dieselbe Stelle.
   Gefundene Dateien werden nie in die JSON geschrieben, nur die eigenen Zuordnungen.
 - **Relative Pfade** in der Konfiguration (`wallpaper.path`) gelten relativ zu

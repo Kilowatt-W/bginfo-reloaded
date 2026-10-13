@@ -72,6 +72,9 @@ public sealed class PanelConfig
     /// multiplizieren (150 % -> Faktor 1,5). Wirkt nur zusammen mit wallpaper.fit = Fill.
     /// </summary>
     public bool ScaleWithDpi { get; set; } = true;
+
+    /// <summary>Hoehe der Balken ("bar" einer Zeile) in Pixeln; wird wie das Panel skaliert.</summary>
+    public int BarHeight { get; set; } = 8;
 }
 
 public enum TextOverflow
@@ -477,6 +480,12 @@ public sealed class ColorConfig
     public string Header { get; set; } = "#FFD700";
     public string Label { get; set; } = "#FFFFFF";
     public string Value { get; set; } = "#82DCD2"; // Aquamarine-Ton, PowerBGInfo-Setup nachempfunden
+
+    /// <summary>Balken ("bar" einer Zeile): der belegte Teil.</summary>
+    public string BarUsed { get; set; } = "#FFD700";
+
+    /// <summary>Balken: der freie Teil (und damit die Flaeche des ganzen Balkens).</summary>
+    public string BarFree { get; set; } = "#FFFFFF30";
 }
 
 /// <summary>Wie das Bild fuer einen Monitor gefunden wurde (siehe <see cref="AppConfig.ResolveWallpaperFor"/>).</summary>
@@ -560,6 +569,13 @@ public sealed class ItemConfig
     /// Grafikkarten). Mehrere Trennzeichen mit | getrennt (", |;"). Leer = nicht teilen.
     /// </summary>
     public string? Split { get; set; }
+
+    /// <summary>
+    /// Balken fuer diese Zeile: ein Prozentwert von 0 bis 100, mit Platzhaltern - "{percent}" bei
+    /// Laufwerken, "{rampercent}", "{battery}". Der belegte Teil erscheint in colors.barUsed, der Rest
+    /// in colors.barFree. Mit Text im Wert steht der Balken darunter, ohne Text steht nur der Balken.
+    /// </summary>
+    public string? Bar { get; set; }
 
     /// <summary>Platzhalter-Zeile: an dieser Stelle erscheinen die "items" der per "include" eingebundenen zentralen Datei.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
@@ -867,8 +883,7 @@ public sealed class AppConfig
         {
             return (null, WallpaperChoice.None);
         }
-        if (Path.GetFileNameWithoutExtension(image).EndsWith(key, StringComparison.OrdinalIgnoreCase)
-            && !string.Equals(image, baseImage, StringComparison.OrdinalIgnoreCase))
+        if (Path.GetFileNameWithoutExtension(image).EndsWith(key, StringComparison.OrdinalIgnoreCase))
         {
             return (image, WallpaperChoice.ExactVariant);
         }

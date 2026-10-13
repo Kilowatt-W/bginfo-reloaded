@@ -393,6 +393,29 @@ der Bezeichnung, jeder weitere in einer eigenen Zeile darunter:
 Leerraum um die Teile und leere Teile entfallen. Geht bei normalen Zeilen und bei `drives`. Im
 Editor: Feld „Trennen bei“ unter „Value“; „Aktueller Wert“ zeigt die Teile mit ⏎ dazwischen.
 
+### Balken für Prozentwerte (`bar`)
+
+Jede Zeile kann einen Balken bekommen – gedacht für die Belegung von Laufwerken, geeignet für jeden
+Prozentwert:
+
+```jsonc
+{ "drives": true, "bar": "{percent}" }                                  // je Laufwerk Text und Balken darunter
+{ "label": "RAM", "value": "{ram} ({rampercent} belegt)", "bar": "{rampercent}" }
+{ "label": "Akku", "value": "", "bar": "{battery}" }                    // ohne Text: nur der Balken
+```
+
+- `bar` ist ein Prozentwert von 0 bis 100, mit Platzhaltern. Aus dem aufgelösten Text wird die
+  erste Zahl genommen (`45`, `45 %`, `45,3 %`); steht keine darin (z. B. `n/a` ohne Akku), erscheint
+  die Zeile ohne Balken.
+- Mit Text in `value` steht der Balken darunter, über die Breite der Wertespalte. Ist `value` leer,
+  steht nur der Balken auf Höhe der Bezeichnung.
+- Farben und Höhe gelten für alle Balken: `colors.barUsed` (belegter Teil), `colors.barFree`
+  (freier Teil), `panel.barHeight` (Pixel, wird wie das Panel skaliert).
+- Im Editor (Reiter „Inhalt“): der Knopf „+ Balken“ gibt der markierten Laufwerke-Zeile einen
+  Balken bzw. springt bei einer normalen Zeile in das Feld „Balken“ unter „Trennen bei“; ohne
+  passende Zeile legt er eine Laufwerke-Zeile mit Balken an. Farben und Höhe stehen im Reiter
+  „Aussehen“. Die Taste Entf löscht in der Zeilenliste die markierte Zeile.
+
 ### Pfad des Hintergrundbilds (`wallpaper.path`)
 
 Leer bedeutet: das Wallpaper des jeweiligen Benutzers. Sonst ein Pfad, der auf allen Rechnern gilt –
@@ -460,19 +483,20 @@ hinterlegen:
 Reihenfolge je Monitor: eigene Zuordnung für genau diese Auflösung, dann die Datei mit dieser
 Auflösung im Namen, dann das Standardbild, dann die am besten passende andere Fassung.
 
-**Standardbild** ist die Datei ohne Auflösung im Namen (`Wallpaper.jpg`). Gibt es sie nicht, gilt
-die Fassung mit 1920x1080 im Namen (`Wallpaper_1920x1080.jpg`) als Standard – 1920 × 1080 ist die
-Standardauflösung. Erst wenn es auch die nicht gibt, wird die am besten passende Fassung gesucht. Das gilt
+**Standardbild** ist die in `wallpaper.path` eingetragene Datei – auch wenn sie selbst eine
+Auflösung im Namen trägt (`Wallpaper_3840x2160.jpg`); die Fassungen für andere Auflösungen werden
+dann trotzdem unter dem Namen ohne Auflösung gesucht (`Wallpaper_BxH.jpg`). Gibt es die
+eingetragene Datei nicht, gilt die Datei ohne Auflösung im Namen (`Wallpaper.jpg`), sonst die
+Fassung mit 1920x1080 im Namen. Erst wenn es keine davon gibt, wird die am besten passende Fassung
+gesucht. Das gilt
 bei jedem Lauf – auch wenn `--watch` nach einem Wechsel der Auflösung neu rendert. Fehlt die Datei
 einer Zuordnung, gibt es eine Warnung im Log und es geht mit dem nächsten Schritt weiter.
 
 Im Editor (Reiter „Hintergrund“, „Bilder je Auflösung“) zeigt eine Liste das Standardbild mit
 seiner tatsächlichen Auflösung, die eigenen Zuordnungen,
 die im Ordner gefundenen Fassungen und für jeden angeschlossenen Monitor, welches Bild er bekommt.
-Zuordnungen lassen sich dort hinzufügen, ändern und entfernen. Wird ein Bild gewählt, das schon eine
-Auflösung im Namen trägt (`Wallpaper_1920x1080.jpg`), trägt der Editor `Wallpaper.jpg` ein – unter
-diesem Namen werden alle Fassungen gefunden; die Datei selbst muss es nicht geben. Eine Meldung
-sagt dabei, welche Datei jetzt als Standardbild gilt.
+Zuordnungen lassen sich dort hinzufügen, ändern und entfernen. Das gewählte Bild wird so
+eingetragen, wie es heißt, und steht in der Liste als „Standardbild (die ausgewählte Datei)“.
 
 ### Mehrere Monitore (`monitors`)
 

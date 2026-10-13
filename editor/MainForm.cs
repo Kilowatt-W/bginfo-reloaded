@@ -46,6 +46,7 @@ public sealed class MainForm : Form
     private readonly TextBox _itemLabel = new() { Dock = DockStyle.Fill };
     private readonly TextBox _itemValue = new() { Dock = DockStyle.Fill };
     private readonly TextBox _itemSplit = new() { Dock = DockStyle.Fill, PlaceholderText = "leer = nicht teilen; z. B.  ,   oder mehrere mit | getrennt:  ,|;" };
+    private readonly TextBox _itemBar = new() { Dock = DockStyle.Fill, PlaceholderText = "leer = kein Balken; Prozentwert, z. B. {percent} bei Laufwerken, {rampercent}, {battery}" };
     private readonly TextBox _itemCurrent = new() { Dock = DockStyle.Fill, ReadOnly = true, TabStop = false, BackColor = SystemColors.Control };
     private readonly System.Windows.Forms.Timer _currentTimer = new() { Interval = 350 };
     private int _currentGeneration;
@@ -291,6 +292,7 @@ public sealed class MainForm : Form
         Add("+ Zeile", () => InsertItem(new ItemConfig { Label = "Bezeichnung", Value = "" }));
         Add("+ Leerraum", () => InsertItem(new ItemConfig { Spacer = true }));
         Add("+ Laufwerke", () => InsertItem(new ItemConfig { Drives = true }));
+        Add("+ Balken", AddBar);
         Add("+ Zentrale Zeilen", () => InsertItem(new ItemConfig { IncludeItems = true }));
         Add("+ Block", () =>
         {
@@ -318,6 +320,11 @@ public sealed class MainForm : Form
         detail.Controls.Add(_itemSplit);
         _tips.SetToolTip(_itemSplit, "Teilt den Wert an diesen Zeichen: der erste Teil steht neben der Bezeichnung,\r\njeder weitere in einer eigenen Zeile darunter – z. B. bei mehreren Grafikkarten.\r\nMehrere Trennzeichen mit | trennen. Leerzeichen um die Teile entfallen.");
         _itemSplit.TextChanged += (_, _) => EditSelectedItem();
+        detail.Controls.Add(new Label { Text = "Balken", AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(3, 6, 10, 6) });
+        detail.Controls.Add(_itemBar);
+        _tips.SetToolTip(_itemBar, "Zeichnet einen Balken aus einem Prozentwert von 0 bis 100 (Platzhalter erlaubt):\r\n{percent} bei Laufwerken, {rampercent} für den Arbeitsspeicher, {battery} für den Akku.\r\nMit Text in „Value“ steht der Balken darunter; ist „Value“ leer, steht nur der Balken.\r\nFarben und Höhe: Reiter „Aussehen“.");
+        _itemBar.TextChanged += (_, _) => EditSelectedItem();
+        _itemBar.Enter += (_, _) => _lastItemTextBox = _itemBar;
         // Was "Value" auf diesem Rechner gerade ergibt - nur Anzeige, wird nicht gespeichert.
         detail.Controls.Add(new Label { Text = "Aktueller Wert", AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(3, 6, 10, 6) });
         detail.Controls.Add(_itemCurrent);
@@ -418,6 +425,15 @@ public sealed class MainForm : Form
             if (!_loading)
             {
                 ShowSelectedItem();
+            }
+        };
+        // Taste Entf in der Zeilenliste loescht die markierte Zeile - wie der Knopf "Entfernen".
+        _items.KeyDown += (_, e) =>
+        {
+            if (e.KeyCode == Keys.Delete && !e.Control && !e.Alt)
+            {
+                RemoveItem();
+                e.Handled = e.SuppressKeyPress = true;
             }
         };
         _itemLabel.Enter += (_, _) => _lastItemTextBox = _itemLabel;
@@ -540,6 +556,12 @@ public sealed class MainForm : Form
         Row(table, "Bezeichnungen", ColorButton(() => _config.Colors.Label, v => _config.Colors.Label = v));
         Row(table, "Werte", ColorButton(() => _config.Colors.Value, v => _config.Colors.Value = v));
 
+        Heading(table, "Balken");
+        Row(table, "Belegter Teil", ColorButton(() => _config.Colors.BarUsed, v => _config.Colors.BarUsed = v));
+        Row(table, "Freier Teil", ColorButton(() => _config.Colors.BarFree, v => _config.Colors.BarFree = v));
+        Row(table, "Höhe in Pixeln", Number(1, 60, () => _config.Panel.BarHeight, v => _config.Panel.BarHeight = (int)v));
+        Row(table, "", Hint("Ein Balken gehört zu einer Zeile: im Reiter „Inhalt“ das Feld „Balken“ mit einem Prozentwert füllen – {percent} bei der\r\nLaufwerke-Zeile, {rampercent} für den Arbeitsspeicher, {battery} für den Akku."));
+
         Heading(table, "Rahmen");
         Row(table, "Rahmen um", Combo(new[]
         {
@@ -640,27 +662,17 @@ public sealed class MainForm : Form
             {
                 // Liegt das Bild neben der Konfigurationsdatei, relativ eintragen - dann funktioniert
                 // das Paar aus Datei und Bild in jedem Ordner, in den es verteilt wird.
-                // Traegt der Name schon eine Aufloesung (bild_1920x1080.jpg), das Bild ohne Zusatz eintragen:
-                // darunter werden alle Fassungen gefunden - die Datei selbst muss es dann nicht geben.
-                var chosen = WallpaperState.StripResolutionSuffix(dialog.FileName);
+                // Die ausgewaehlte Datei wird eingetragen, wie sie ist - sie gilt als Standardbild. Traegt ihr
+                // Name eine Aufloesung (bild_3840x2160.jpg), werden die Fassungen fuer andere Aufloesungen
+                // trotzdem unter dem Namen ohne sie gesucht (bild_BxH.jpg).
+                var chosen = dialog.FileName;
                 var sameFolder = _path != null && string.Equals(Path.GetDirectoryName(chosen), Path.GetDirectoryName(_path), StringComparison.OrdinalIgnoreCase);
                 path.Text = sameFolder ? @".\" + Path.GetFileName(chosen) : chosen;
-                if (!string.Equals(chosen, dialog.FileName, StringComparison.OrdinalIgnoreCase))
+                var plain = WallpaperState.StripResolutionSuffix(chosen);
+                if (!string.Equals(plain, chosen, StringComparison.OrdinalIgnoreCase))
                 {
-                    // Sagen, welche Datei jetzt als Standard gilt: die ohne Aufloesung im Namen, sonst die mit 1920x1080.
-                    var standard = WallpaperState.FindDefaultImage(chosen);
-                    var which = standard == null ? "ein Standardbild gibt es nicht, es gilt die am besten passende Fassung"
-                        : string.Equals(standard, chosen, StringComparison.OrdinalIgnoreCase) ? $"als Standard gilt {Path.GetFileName(chosen)} (die Datei ohne Auflösung im Namen)"
-                        : $"{Path.GetFileName(chosen)} gibt es nicht, als Standard gilt deshalb {Path.GetFileName(standard)}";
-                    _status.Text = $"{Path.GetFileName(dialog.FileName)} trägt eine Auflösung im Namen – eingetragen ist {Path.GetFileName(chosen)}; {which}.";
-                    MessageBox.Show(this,
-                        $"{Path.GetFileName(dialog.FileName)} trägt eine Auflösung im Namen.\r\n\r\n" +
-                        $"Eingetragen ist deshalb {Path.GetFileName(chosen)} – unter diesem Namen werden alle Fassungen je Auflösung gefunden.\r\n\r\n" +
-                        (standard == null ? "Ein Standardbild gibt es nicht: Monitore ohne eigenes Bild bekommen die am besten passende Fassung."
-                            : string.Equals(standard, chosen, StringComparison.OrdinalIgnoreCase)
-                                ? $"Als Standardbild für alle Auflösungen ohne eigenes Bild gilt {Path.GetFileName(chosen)} – die Datei ohne Auflösung im Namen."
-                                : $"{Path.GetFileName(chosen)} gibt es nicht. Als Standardbild für alle Auflösungen ohne eigenes Bild gilt deshalb {Path.GetFileName(standard)} (1920 × 1080 ist die Standardauflösung)."),
-                        AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    var stem = Path.GetFileNameWithoutExtension(plain);
+                    _status.Text = $"{Path.GetFileName(chosen)} gilt als Standardbild; Fassungen für andere Auflösungen werden als {stem}_BxH{Path.GetExtension(chosen)} im selben Ordner gesucht – siehe Liste darunter.";
                 }
             }
         };
@@ -703,7 +715,7 @@ public sealed class MainForm : Form
         ResolutionButton("Neu einlesen", "Den Ordner des Bildes erneut durchsuchen", RefreshResolutionList);
         Row(table, "", _resolutions);
         Row(table, "", resolutionButtons);
-        Row(table, "", Hint("Als Standardbild gilt die Datei ohne Auflösung im Namen (bild.jpg). Gibt es sie nicht, gilt die Fassung mit 1920x1080 im Namen als Standard.\r\nGefunden werden Dateien neben dem Bild oben, die dessen Namen mit angehängter Auflösung tragen (bild_3440x1440.jpg).\r\nEine eigene Zuordnung hat Vorrang und gilt auch für Auflösungen ohne passende Datei. Gespeichert werden nur die eigenen Zuordnungen;\r\ndie Dateien im Ordner sucht das Programm bei jedem Lauf frisch – auch nach einem Wechsel der Auflösung."));
+        Row(table, "", Hint("Als Standardbild gilt die oben ausgewählte Datei – auch wenn sie eine Auflösung im Namen trägt. Gibt es sie nicht, gilt die Datei ohne Auflösung\r\nim Namen (bild.jpg), sonst die Fassung mit 1920x1080 im Namen. Gefunden werden Dateien neben dem Bild, die dessen Namen mit angehängter\r\nAuflösung tragen (bild_3440x1440.jpg) – gesucht wird unter dem Namen ohne Auflösung.\r\nEine eigene Zuordnung hat Vorrang und gilt auch für Auflösungen ohne passende Datei. Gespeichert werden nur die eigenen Zuordnungen;\r\ndie Dateien im Ordner sucht das Programm bei jedem Lauf frisch – auch nach einem Wechsel der Auflösung."));
         _loaders.Add(RefreshResolutionList);
         path.TextChanged += (_, _) => RefreshResolutionList();
 
@@ -1575,9 +1587,10 @@ public sealed class MainForm : Form
         if (item.Drives)
         {
             return "      Laufwerke – eine Zeile je Festplatte"
-                + (item.Label != null || item.Value != null ? $":  {item.Label}  →  {item.Value}" : "");
+                + (item.Label != null || item.Value != null ? $":  {item.Label}  →  {item.Value}" : "")
+                + (string.IsNullOrWhiteSpace(item.Bar) ? "" : "   (Balken)");
         }
-        return $"      {item.Label}:  {item.Value}" + (item.HideIfEmpty ? "   (nur wenn vorhanden)" : "") + (string.IsNullOrEmpty(item.Split) ? "" : "   (geteilt)");
+        return $"      {item.Label}:  {item.Value}" + (item.HideIfEmpty ? "   (nur wenn vorhanden)" : "") + (string.IsNullOrEmpty(item.Split) ? "" : "   (geteilt)") + (string.IsNullOrWhiteSpace(item.Bar) ? "" : "   (Balken)");
     }
 
     private void RefreshItems(int select)
@@ -1618,6 +1631,8 @@ public sealed class MainForm : Form
         _itemHide.Enabled = isValue;
         _itemSplit.Enabled = isDrives || isValue;
         _itemSplit.Text = isDrives || isValue ? item!.Split ?? "" : "";
+        _itemBar.Enabled = isDrives || isValue;
+        _itemBar.Text = isDrives || isValue ? item!.Bar ?? "" : "";
         _itemLabel.Text = isBlock ? item!.Block : isSection ? item!.Section : isMarker ? "" : item?.Label ?? "";
         _itemValue.Text = isSection || isMarker ? "" : item?.Value ?? "";
         _itemHide.Checked = isValue && item!.HideIfEmpty;
@@ -1756,7 +1771,8 @@ public sealed class MainForm : Form
             }
             var label = resolver.Expand(SystemInfoCollector.FormatDrive(drives[0], item.Label ?? SystemInfoCollector.DefaultDriveLabel));
             var value = resolver.Expand(SystemInfoCollector.FormatDrive(drives[0], item.Value ?? SystemInfoCollector.DefaultDriveValue));
-            return $"{label}   {ShowParts(value, item.Split)}" + (drives.Count > 1 ? $"   (+ {drives.Count - 1} weitere)" : "") + hidden;
+            var driveBar = string.IsNullOrWhiteSpace(item.Bar) ? null : SystemInfoCollector.ParseBar(resolver.Expand(SystemInfoCollector.FormatDrive(drives[0], item.Bar)));
+            return $"{label}   {ShowParts(value, item.Split)}" + ShowBar(item.Bar, driveBar) + (drives.Count > 1 ? $"   (+ {drives.Count - 1} weitere)" : "") + hidden;
         }
 
         var current = resolver.Expand(item.Value);
@@ -1765,8 +1781,14 @@ public sealed class MainForm : Form
             : "";
         // Enthaelt auch die Bezeichnung Platzhalter, sie mit anzeigen.
         var labelText = item.Label != null && item.Label.Contains('{') ? resolver.Expand(item.Label) + ":  " : "";
-        return labelText + ShowParts(current, item.Split) + dropped + hidden;
+        return labelText + ShowParts(current, item.Split) + ShowBar(item.Bar, SystemInfoCollector.ParseBar(resolver.Expand(item.Bar))) + dropped + hidden;
     }
+
+    /// <summary>Was der Balken dieser Zeile zeigt - oder dass aus der Angabe kein Prozentwert zu lesen ist.</summary>
+    private static string ShowBar(string? configured, double? fraction) =>
+        string.IsNullOrWhiteSpace(configured) ? ""
+        : fraction is { } value ? $"   [Balken {value * 100:0} %]"
+        : "   [Balken: kein Prozentwert – ohne Balken]";
 
     /// <summary>Den Wert so zeigen, wie "Trennen bei" ihn auf Zeilen verteilt: die Teile mit ⏎ dazwischen.</summary>
     private static string ShowParts(string value, string? split)
@@ -1816,6 +1838,7 @@ public sealed class MainForm : Form
             item.Value = _itemValue.Text.Length > 0 ? _itemValue.Text : null;
             // Nicht trimmen: ein Leerzeichen kann zum Trennzeichen gehoeren.
             item.Split = _itemSplit.Text.Length > 0 ? _itemSplit.Text : null;
+            item.Bar = string.IsNullOrWhiteSpace(_itemBar.Text) ? null : _itemBar.Text.Trim();
         }
         else
         {
@@ -1823,6 +1846,7 @@ public sealed class MainForm : Form
             item.Value = _itemValue.Text;
             item.HideIfEmpty = _itemHide.Checked;
             item.Split = _itemSplit.Text.Length > 0 ? _itemSplit.Text : null;
+            item.Bar = string.IsNullOrWhiteSpace(_itemBar.Text) ? null : _itemBar.Text.Trim();
         }
 
         _loading = true;
@@ -1838,6 +1862,36 @@ public sealed class MainForm : Form
         RefreshItems(index);
         Changed();
         (item.Section != null || !item.Spacer && !item.Drives && !item.IncludeItems ? _itemLabel : null)?.Focus();
+    }
+
+    /// <summary>
+    /// Knopf "+ Balken": gibt der markierten Zeile einen Balken, wenn sie einen tragen kann - bei
+    /// Laufwerken gleich mit {percent}, bei einer normalen Zeile wird das Feld "Balken" zum Ausfuellen
+    /// angesprungen. Sonst (Ueberschrift, Leerraum, nichts markiert) entsteht eine neue
+    /// Laufwerke-Zeile mit Balken.
+    /// </summary>
+    private void AddBar()
+    {
+        var item = SelectedItem;
+        var isMarker = item != null && (item.Block != null || item.EndBlock || item.Spacer || item.IncludeItems || item.Section != null);
+        if (item is { Drives: true } && !isMarker)
+        {
+            if (string.IsNullOrWhiteSpace(item.Bar))
+            {
+                _itemBar.Text = "{percent}";
+            }
+            _status.Text = "Balken für die Laufwerke: {percent} = belegter Anteil. Farben und Höhe im Reiter „Aussehen“, Abschnitt „Balken“.";
+            _itemBar.Focus();
+            return;
+        }
+        if (item != null && !isMarker)
+        {
+            _status.Text = "Im Feld „Balken“ einen Prozentwert eintragen, z. B. {rampercent} oder {battery} – Doppelklick auf einen Platzhalter fügt ihn dort ein.";
+            _itemBar.Focus();
+            return;
+        }
+        InsertItem(new ItemConfig { Drives = true, Bar = "{percent}" });
+        _status.Text = "Laufwerke-Zeile mit Balken eingefügt. Für andere Werte: Zeile markieren und das Feld „Balken“ füllen.";
     }
 
     private void RemoveItem()
@@ -1999,7 +2053,7 @@ public sealed class MainForm : Form
     {
         var item = SelectedItem;
         var isPlainLine = item != null && _itemLabel.Enabled && _itemValue.Enabled && !item.Drives && meaning.Length > 0;
-        if (!isPlainLine || ReferenceEquals(_lastItemTextBox, _itemWhen))
+        if (!isPlainLine || ReferenceEquals(_lastItemTextBox, _itemWhen) || ReferenceEquals(_lastItemTextBox, _itemBar))
         {
             InsertAtCaret(tag);
             return;
@@ -2088,7 +2142,8 @@ public sealed class MainForm : Form
                 {
                     var size = WallpaperRenderer.TryGetImageSize(standard);
                     var origin = configured == null ? "Standardbild – Wallpaper des Benutzers"
-                        : string.Equals(standard, baseImage, StringComparison.OrdinalIgnoreCase) ? "Standardbild (ohne Auflösung im Namen)"
+                        : string.Equals(standard, baseImage, StringComparison.OrdinalIgnoreCase) ? "Standardbild (die ausgewählte Datei)"
+                        : string.Equals(standard, WallpaperState.StripResolutionSuffix(configured), StringComparison.OrdinalIgnoreCase) ? $"Standardbild (ohne Auflösung im Namen, kein {Path.GetFileName(configured)})"
                         : $"Standardbild (1920 × 1080 im Namen, kein {Path.GetFileName(configured)})";
                     result.Add((size is { } s ? $"{s.Width}x{s.Height}" : "?", standard, origin, "", "base"));
                 }

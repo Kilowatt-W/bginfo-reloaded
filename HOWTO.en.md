@@ -407,6 +407,28 @@ label, every further part in a line of its own below:
 Whitespace around the parts and empty parts are dropped. Works for normal lines and for `drives`.
 In the editor: field “Trennen bei” below “Value”; “Aktueller Wert” shows the parts with ⏎ between them.
 
+### Bars for percentages (`bar`)
+
+Every line can get a bar – meant for the usage of drives, suitable for any percentage:
+
+```jsonc
+{ "drives": true, "bar": "{percent}" }                                  // per drive the text and a bar below
+{ "label": "RAM", "value": "{ram} ({rampercent} used)", "bar": "{rampercent}" }
+{ "label": "Battery", "value": "", "bar": "{battery}" }                 // without text: only the bar
+```
+
+- `bar` is a percentage from 0 to 100, with placeholders. The first number in the resolved text is
+  taken (`45`, `45 %`, `45.3 %`); if there is none (e.g. `n/a` without a battery), the line appears
+  without a bar.
+- With text in `value` the bar stands below it, across the width of the value column. If `value`
+  is empty, only the bar is drawn at the height of the label.
+- Colours and height apply to all bars: `colors.barUsed` (used part), `colors.barFree` (free part),
+  `panel.barHeight` (pixels, scaled like the panel).
+- In the editor (tab “Inhalt”): the button “+ Balken” gives the selected drives line a bar or, for
+  a normal line, jumps to the field “Balken” below “Trennen bei”; without a suitable line it adds a
+  drives line with a bar. Colours and height are on the tab “Aussehen”. The Delete key removes the
+  selected line in the list of lines.
+
 ### Path of the background image (`wallpaper.path`)
 
 Empty means: the wallpaper of the respective user. Otherwise a path that is valid on all machines –
@@ -471,19 +493,19 @@ For resolutions without a matching image in the folder, any image can be assigne
 Order per monitor: the own assignment for exactly this resolution, then the file with this
 resolution in its name, then the default image, then the best fitting other version.
 
-**The default image** is the file without a resolution in its name (`Wallpaper.jpg`). If it does
-not exist, the version with 1920x1080 in its name (`Wallpaper_1920x1080.jpg`) is the default –
-1920 × 1080 is the standard resolution. Only if that is missing too, the best fitting version is
-looked for. This
+**The default image** is the file entered in `wallpaper.path` – even if it carries a resolution in
+its own name (`Wallpaper_3840x2160.jpg`); the versions for other resolutions are then still looked
+for under the name without the resolution (`Wallpaper_WxH.jpg`). If the entered file does not
+exist, the file without a resolution in its name (`Wallpaper.jpg`) applies, otherwise the version
+with 1920x1080 in its name. Only if none of them exists, the best fitting version is looked for. This
 applies on every run – also when `--watch` renders again after a resolution change. If the file of
 an assignment is missing, the log gets a warning and the next step applies.
 
 In the editor (tab “Hintergrund”, “Bilder je Auflösung”) a list shows the default image with its
 actual resolution, the own assignments, the
 versions found in the folder and, for every connected monitor, which image it gets. Assignments can
-be added, changed and removed there. If an image is chosen that already carries a resolution in its
-name (`Wallpaper_1920x1080.jpg`), the editor enters `Wallpaper.jpg` – all versions are found under
-that name; the file itself need not exist. A message then says which file is now the default image.
+be added, changed and removed there. The chosen image is entered under its own name and shown in
+the list as “Standardbild (die ausgewählte Datei)” (default image, the selected file).
 
 ### Multiple monitors (`monitors`)
 
