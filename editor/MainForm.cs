@@ -74,11 +74,12 @@ public sealed class MainForm : Form
     private readonly SplitContainer _split = new() { Dock = DockStyle.Fill };
     private readonly ToolTip _tips = new() { AutoPopDelay = 30000, InitialDelay = 300, ReshowDelay = 100 };
     private readonly Label _previewCaption = new() { AutoSize = true, Margin = new Padding(3, 3, 3, 4) };
-    // Rechts neben der Ueberschrift der Vorschau, in Orange: dieser Rechner ist laut White-/Blacklist ausgeschlossen.
+    // Eigene Zeile links unten ueber der Fusszeile, in Orange: dieser Rechner ist laut White-/Blacklist
+    // ausgeschlossen. Nur sichtbar, wenn das zutrifft.
     private readonly Label _previewHostNote = new()
     {
-        AutoSize = false, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleRight, AutoEllipsis = true,
-        ForeColor = Color.FromArgb(214, 108, 0), Margin = new Padding(12, 3, 3, 4)
+        AutoSize = false, Dock = DockStyle.Bottom, TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true, Visible = false,
+        ForeColor = Color.FromArgb(190, 90, 0), BackColor = Color.FromArgb(255, 243, 224), Padding = new Padding(8, 0, 8, 0)
     };
     // Erkannte Aufloesung und Skalierung des primaeren Monitors, fuer Titelleiste und Vorschau-Ueberschrift.
     private string _displayInfo = "";
@@ -126,13 +127,9 @@ public sealed class MainForm : Form
         previews.RowStyles.Add(new RowStyle(SizeType.Percent, 45));
         previews.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         previews.RowStyles.Add(new RowStyle(SizeType.Percent, 55));
-        var captionRow = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 2, RowCount = 1, Margin = Padding.Empty };
-        captionRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        captionRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        captionRow.Controls.Add(_previewCaption);
-        captionRow.Controls.Add(_previewHostNote);
+        previews.Controls.Add(_previewCaption);
         _previewHostNote.Font = new Font(Font, FontStyle.Bold);
-        previews.Controls.Add(captionRow);
+        _previewHostNote.Height = _previewHostNote.Font.Height + LogicalToDeviceUnits(10);
         previews.Controls.Add(_preview);
         previews.Controls.Add(new Label { Text = "Info-Panel in Originalgröße", AutoSize = true, Margin = new Padding(3, 10, 3, 4) });
         previews.Controls.Add(_detail);
@@ -152,6 +149,7 @@ public sealed class MainForm : Form
         // Reihenfolge zaehlt: das fuellende Element zuerst, die Leisten danach.
         Controls.Add(_split);
         Controls.Add(BuildToolbar());
+        Controls.Add(_previewHostNote); // liegt ueber der Fusszeile
         Controls.Add(status);
 
         _previewTimer.Tick += (_, _) => RenderPreview();
@@ -2672,6 +2670,50 @@ public sealed class MainForm : Form
 
     // ------------------------------------------------------------------ Vorschau
 
+    /// <summary>Zeigt bzw. verbirgt die orange Zeile "dieser Rechner ist ausgeschlossen" links unten.</summary>
+    private void ShowHostNote(string note)
+    {
+        _previewHostNote.Text = note;
+        _previewHostNote.Visible = note.Length > 0;
+        _tips.SetToolTip(_previewHostNote, note);
+    }
+
+    /// <summary>Bei ausgeblendeter Vorschau: nur pruefen, ob dieser Rechner ausgeschlossen ist (im Hintergrund, wegen der Listendateien).</summary>
+    private async void UpdateHostNoteWithoutPreview()
+    {
+        var generation = ++_previewGeneration;
+        var json = _config.ToJson();
+        var baseDirectory = ConfigDirectory;
+        try
+        {
+            var note = await Task.Run(() =>
+            {
+                var config = AppConfig.FromJson(json, "Editor");
+                config.BaseDirectory = baseDirectory;
+                config.ResolveHostFiles();
+                return DescribeHostExclusion(config);
+            });
+            if (generation == _previewGeneration)
+            {
+                ShowHostNote(note);
+            }
+        }
+        catch
+        {
+            // die Meldung dazu liefert die Vorschau, sobald sie wieder eingeschaltet ist
+        }
+    }
+
+    /// <summary>Was BGInfo-Reloaded.exe auf diesem Rechner laut White-/Blacklist tut - leer, wenn er nicht ausgeschlossen ist.</summary>
+    private static string DescribeHostExclusion(AppConfig config)
+    {
+        var hostNames = new[] { Environment.MachineName, new ValueResolver().Expand("{fqdn}") };
+        return config.Hosts.Allows(hostNames, out var reason) ? ""
+            : $"Achtung: {Environment.MachineName} {reason} – " + (config.Hosts.OnExcluded == ExcludedAction.Skip
+                ? "BGInfo-Reloaded.exe ändert hier nichts. Die Vorschau zeigt das Panel trotzdem."
+                : "BGInfo-Reloaded.exe setzt hier nur den Hintergrund, ohne Panel. Die Vorschau zeigt das Panel trotzdem.");
+    }
+
     /// <summary>Merkt sich je Benutzer, ob der Vorschaubereich eingeblendet ist.</summary>
     private static string PreviewSettingFile => Path.Combine(WallpaperState.StateDirectory, "editor-preview.txt");
 
@@ -2718,10 +2760,8 @@ public sealed class MainForm : Form
     private void SchedulePreview()
     {
         _previewTimer.Stop();
-        if (_previewEnabled)
-        {
-            _previewTimer.Start();
-        }
+        // Auch ohne Vorschau laeuft der Zeitgeber: dann wird nur der Hinweis "Rechner ausgeschlossen" aktualisiert.
+        _previewTimer.Start();
     }
 
     private async void RenderPreview()
@@ -2730,6 +2770,7 @@ public sealed class MainForm : Form
         if (!_previewEnabled)
         {
             _status.Text = "Vorschau ist ausgeblendet – oben „Vorschau“ einschalten.";
+            UpdateHostNoteWithoutPreview();
             return;
         }
         var generation = ++_previewGeneration;
@@ -2761,8 +2802,7 @@ public sealed class MainForm : Form
             {
                 return; // inzwischen wurde weiter editiert, das neuere Bild folgt
             }
-            _previewHostNote.Text = hostNote;
-            _tips.SetToolTip(_previewHostNote, hostNote);
+            ShowHostNote(hostNote);
 
             Bitmap image;
             using (var stream = File.OpenRead(file))
@@ -2928,11 +2968,7 @@ public sealed class MainForm : Form
                 ? $" ({size.Width} × {size.Height}) – ACHTUNG: Anpassung „Keine“, Windows skaliert und beschneidet das Bild samt Panel selbst; die Vorschau zeigt das nicht"
                 : $" ({size.Width} × {size.Height}) – Achtung: passt nicht zum Bildschirm, ein Teil des Bildes ist nicht zu sehen";
         }
-        var hostNote = allowed ? ""
-            : $"Achtung: {Environment.MachineName} {reason} – " + (config.Hosts.OnExcluded == ExcludedAction.Skip
-                ? "BGInfo-Reloaded.exe ändert hier nichts. Die Vorschau zeigt das Panel trotzdem."
-                : "BGInfo-Reloaded.exe setzt hier nur den Hintergrund, ohne Panel. Die Vorschau zeigt das Panel trotzdem.");
-        return (note, panel, hostNote);
+        return (note, panel, DescribeHostExclusion(config));
     }
 
     /// <summary>

@@ -103,9 +103,9 @@ The tabs and buttons (German labels in parentheses):
   “Relative Breite” (`panel.screenFraction`); switching it off restores the previous values. The
   background image itself is always rendered at the real pixel resolution of the monitor anyway.
 - **Excluded machine:** if the machine the editor runs on is on the blacklist (or not on the
-  whitelist), the preview still shows the panel. To the right of “Vorschau – ganzer Bildschirm” an
-  orange note then says that `BGInfo-Reloaded.exe` only sets the background here or changes nothing
-  (full text when the mouse points at it).
+  whitelist), the preview still shows the panel. At the bottom left, in a line of its own above the
+  status bar, an orange note then says that `BGInfo-Reloaded.exe` only sets the background here or
+  changes nothing – also while the preview is hidden.
 - **Searching placeholders:** the field “Suchen” below “WMI-Abfrage…” filters the placeholder list
   while typing, across placeholder, meaning and value; several words must all occur. Esc or ✕ clears it.
 - **Preview (Vorschau, toggle in the toolbar):** shows or hides the preview area on the right; while

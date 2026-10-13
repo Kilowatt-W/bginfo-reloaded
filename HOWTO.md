@@ -96,9 +96,9 @@ BGInfo-Reloaded-Editor.exe BGInfo-Reloaded.json      eine vorhandene Datei öffn
   (`panel.screenFraction`) zusammen aus; Ausschalten stellt die vorherigen Werte wieder her. Das
   Hintergrundbild selbst wird ohnehin immer in der echten Pixelauflösung des Monitors gerendert.
 - **Ausgeschlossener Rechner:** steht der Rechner, auf dem der Editor läuft, auf der Blacklist (oder
-  nicht auf der Whitelist), zeigt die Vorschau das Panel trotzdem. Rechts neben „Vorschau – ganzer
-  Bildschirm“ steht dann in Orange, dass `BGInfo-Reloaded.exe` hier nur den Hintergrund setzt bzw.
-  nichts ändert (voller Text beim Zeigen mit der Maus).
+  nicht auf der Whitelist), zeigt die Vorschau das Panel trotzdem. Links unten, in einer eigenen
+  Zeile über der Fußzeile, steht dann in Orange, dass `BGInfo-Reloaded.exe` hier nur den Hintergrund
+  setzt bzw. nichts ändert – auch bei ausgeblendeter Vorschau.
 - **Platzhalter suchen:** das Feld „Suchen“ unter „WMI-Abfrage…“ filtert die Platzhalterliste beim
   Tippen über Platzhalter, Bedeutung und Wert; mehrere Wörter müssen alle vorkommen. Esc oder ✕ leert es.
 - **Vorschau (Schalter in der Leiste):** blendet den Vorschaubereich rechts ein oder aus; ausgeblendet

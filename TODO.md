@@ -238,5 +238,7 @@ WMI-Dialog, Anzeige von Blöcken und Filtern. Noch von Hand durchzuklicken:
       (exe: Ordnerfassungen, Zuordnung, fehlende Datei geprüft; Editor: Liste per Bildschirmfoto)
 - [x] 2026-10-13 Version 2.14.1: die Liste „Bilder je Auflösung“ führt auch das Standardbild mit seiner
       tatsächlichen Auflösung an und vermerkt je Monitor das verwendete Bild; ein Bild für 1920 × 1080 steht fest direkt darunter
+- [x] 2026-10-13 Version 2.14.2: der Hinweis „Rechner ausgeschlossen“ steht in einer eigenen orangen Zeile
+      links unten über der Fußzeile (vorher rechts neben der Vorschau-Überschrift, dort verdrängt)
 - [x] 2026-10-01 Rendering von SixLabors ImageSharp auf `System.Drawing.Common` (GDI+, MIT)
       umgestellt – Entscheidung Rendering-Bibliothek damit erledigt, kein Lizenzthema mehr
