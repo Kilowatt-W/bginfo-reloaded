@@ -249,7 +249,9 @@ public sealed class MainForm : Form
         bar.Items.Add(Button("Vorschau aktualisieren", '\uE72C', "Werte neu abfragen und Vorschau neu rendern", RenderPreview));
         bar.Items.Add(Button("Vorschau anzeigen", '\uE740', "Die aktuelle Darstellung als Vollbild zeigen – so, wie sie auf dem Desktop aussieht (Esc oder Klick schließt)", ShowFullscreenPreview));
         bar.Items.Add(Button("Jetzt anwenden", '\uE768', "Speichern und BGInfo-Reloaded.exe mit dieser Konfiguration ausführen", () => Apply(false)));
-        bar.Items.Add(Button("Anwenden und beenden", '\uE8FB', "Speichern, BGInfo-Reloaded.exe mit dieser Konfiguration ausführen und den Editor danach schließen.\r\nBei einem Fehler bleibt der Editor offen.", () => Apply(true)));
+        bar.Items.Add(new ToolStripSeparator());
+        bar.Items.Add(Button("Aktualisieren", '\uE896', "Programm jetzt aktualisieren: den Update-Ordner aus der Konfiguration prüfen und Neueres holen –\r\nauch wenn das automatische Prüfen ausgeschaltet ist. Wurde der Editor selbst aktualisiert, bietet die Meldung den Neustart an.\r\nOhne Ordner, aber mit GitHub-Repository: Update über BGInfo-Reloaded.exe --update.", UpdateNow));
+        bar.Items.Insert(bar.Items.Count - 2, Button("Anwenden und beenden", '\uE8FB', "Speichern, BGInfo-Reloaded.exe mit dieser Konfiguration ausführen und den Editor danach schließen.\r\nBei einem Fehler bleibt der Editor offen.", () => Apply(true)));
         return bar;
     }
 
@@ -2630,7 +2632,40 @@ public sealed class MainForm : Form
     /// sagen (geholt, verfuegbar, Ordner nicht erreichbar), erscheint eine Meldung; danach geht es
     /// normal weiter. Ein Fehler hier darf den Editor nie am Start hindern.
     /// </summary>
-    private async void CheckUpdateFolderAtStart()
+    private void CheckUpdateFolderAtStart() => CheckUpdateFolder(manual: false);
+
+    /// <summary>
+    /// Knopf "Aktualisieren": prueft den Update-Ordner sofort und holt Neueres, egal ob das automatische
+    /// Pruefen eingeschaltet ist - und sagt auch, wenn alles aktuell ist. Ohne Ordner, aber mit
+    /// eingetragenem GitHub-Repository laeuft das Update ueber BGInfo-Reloaded.exe --update.
+    /// </summary>
+    private void UpdateNow()
+    {
+        if (!string.IsNullOrWhiteSpace(_config.Update.Path))
+        {
+            if (_path == null)
+            {
+                MessageBox.Show(this, "Bitte die Konfiguration zuerst speichern – der Update-Ordner wird relativ zu ihrer Datei aufgelöst.", AppTitle + " – Update", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            CheckUpdateFolder(manual: true);
+            return;
+        }
+        if (!string.IsNullOrWhiteSpace(_config.Update.Repo))
+        {
+            if ((_dirty || _path == null) && !Save(false))
+            {
+                return;
+            }
+            RunTool($"--update --config \"{_path}\"", $"Update aus {_config.Update.Repo} ausgeführt – Einzelheiten im Log ({RunLog.LogFile}).");
+            return;
+        }
+        MessageBox.Show(this,
+            "Es ist weder ein Update-Ordner noch ein GitHub-Repository eingetragen.\r\n\r\nBeides steht im Reiter „Autostart und Werkzeuge“ unter „Selbst-Update“.",
+            AppTitle + " – Update", MessageBoxButtons.OK, MessageBoxIcon.Information);
+    }
+
+    private async void CheckUpdateFolder(bool manual)
     {
         if (_path == null || string.IsNullOrWhiteSpace(_config.Update.Path))
         {
@@ -2642,11 +2677,16 @@ public sealed class MainForm : Form
         FolderUpdateResult? result = null;
         string folder = "";
         bool auto = false;
+        if (manual)
+        {
+            _status.Text = "Update-Ordner wird geprüft…";
+        }
         try
         {
             // Eigene Kopie: der Hintergrund-Thread liest, waehrend hier schon editiert werden kann.
             var snapshot = AppConfig.FromJson(_config.ToJson(), file);
-            auto = snapshot.Update.Auto;
+            // Von Hand ausgeloest wird immer geholt - dafuer ist der Knopf da.
+            auto = manual || snapshot.Update.Auto;
             folder = snapshot.ResolveUpdatePath() ?? "";
             if (folder.Length == 0)
             {
@@ -2667,7 +2707,35 @@ public sealed class MainForm : Form
 
         if (messages.Count == 0)
         {
-            return; // alles aktuell
+            // Der Editor wurde vorhin schon ersetzt und laeuft noch in der alten Fassung: Neustart erneut anbieten.
+            if (manual && result is { RestartPending: true })
+            {
+                var restartNow = new TaskDialogButton("Jetzt neu starten");
+                var notYet = new TaskDialogButton("Später");
+                var pending = new TaskDialogPage
+                {
+                    Caption = AppTitle + " – Update",
+                    Heading = "Die neue Version ist schon geholt",
+                    Text = $"Update-Ordner: {folder}\r\n\r\nDer Editor wurde bereits aktualisiert und läuft noch in der alten Fassung. Die neue Version wird mit dem nächsten Start aktiv.",
+                    Icon = TaskDialogIcon.Information,
+                    Buttons = { restartNow, notYet },
+                    DefaultButton = restartNow,
+                    AllowCancel = true
+                };
+                _status.Text = "Die neue Version ist schon geholt – sie wird mit dem nächsten Start aktiv.";
+                if (TaskDialog.ShowDialog(this, pending) == restartNow)
+                {
+                    RestartEditor();
+                }
+                return;
+            }
+            // alles aktuell - beim Start still, von Hand ausgeloest mit Bestaetigung
+            if (manual)
+            {
+                _status.Text = "Alles aktuell – im Update-Ordner liegt nichts Neueres.";
+                MessageBox.Show(this, $"Update-Ordner: {folder}\r\n\r\nAlles aktuell – es liegt nichts Neueres bereit.", AppTitle + " – Update", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            return;
         }
 
         // Die Konfiguration neben dem Programm wurde ersetzt: neu laden, sofern es die geoeffnete ist

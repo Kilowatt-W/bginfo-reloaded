@@ -8,7 +8,8 @@ namespace BgInfoReloaded;
 /// <param name="ConfigUpdated">Die BGInfo-Reloaded.json neben dem Programm wurde ersetzt.</param>
 /// <param name="SelfUpdated">Das gerade laufende Programm wurde ersetzt - aktiv ab dem naechsten Start.</param>
 /// <param name="Reachable">Der Update-Ordner war erreichbar.</param>
-public sealed record FolderUpdateResult(int Changes, bool ConfigUpdated, bool SelfUpdated, bool Reachable);
+/// <param name="RestartPending">Das laufende Programm wurde schon frueher ersetzt und wartet nur noch auf einen Neustart.</param>
+public sealed record FolderUpdateResult(int Changes, bool ConfigUpdated, bool SelfUpdated, bool Reachable, bool RestartPending = false);
 
 /// <summary>
 /// Selbst-Update aus einem Ordner (lokal oder UNC-Share), der in der Konfiguration unter
@@ -76,13 +77,31 @@ public static class FolderUpdater
         var changes = 0;
         var selfUpdated = false;
         var configUpdated = false;
-        if (options.Program)
+        var restartPending = false;
+        // Das laufende Programm wurde in dieser Sitzung schon getauscht (die alte Fassung liegt als
+        // .old daneben und ist noch gesperrt): nicht noch einmal versuchen. Seine Version laesst sich
+        // dann auch nicht verlaesslich lesen - Windows liefert fuer den Pfad des laufenden Programms
+        // die Angaben des geladenen, alten Abbilds.
+        bool AlreadySwapped(string name)
+        {
+            if (!IsSelf(name, currentExe) || !File.Exists(currentExe + ".old"))
+            {
+                return false;
+            }
+            restartPending = true;
+            if (!quiet)
+            {
+                log($"{name}: bereits aktualisiert - die neue Version wird mit dem naechsten Start aktiv.");
+            }
+            return true;
+        }
+        if (options.Program && !AlreadySwapped(MainExe))
         {
             var done = UpdateExecutable(MainExe, folder, ownDirectory, onlyIfInstalled: false, checkOnly, quiet, log);
             changes += done;
             selfUpdated |= done > 0 && !checkOnly && IsSelf(MainExe, currentExe);
         }
-        if (options.Editor)
+        if (options.Editor && !AlreadySwapped(EditorExe))
         {
             var done = UpdateExecutable(EditorExe, folder, ownDirectory, onlyIfInstalled: true, checkOnly, quiet, log);
             changes += done;
@@ -107,7 +126,7 @@ public static class FolderUpdater
         {
             log("Nur geprueft - --update ohne --check-only holt die genannten Dateien.");
         }
-        return new FolderUpdateResult(changes, configUpdated, selfUpdated, Reachable: true);
+        return new FolderUpdateResult(changes, configUpdated, selfUpdated, Reachable: true, restartPending);
     }
 
     private static bool IsSelf(string name, string currentExe) =>

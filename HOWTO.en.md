@@ -110,6 +110,11 @@ The tabs and buttons (German labels in parentheses):
   while typing, across placeholder, meaning and value; several words must all occur. Esc or ✕ clears it.
 - **Preview (Vorschau, toggle in the toolbar):** shows or hides the preview area on the right; while
   hidden nothing is rendered. The choice is remembered per user.
+- **Update (Aktualisieren, button in the toolbar):** checks the update folder immediately and
+  fetches newer files – even if automatic checking is off. Then as on start: a message with the
+  result and, if the editor was updated, “Jetzt neu starten” (restart now); if everything is up to
+  date, it says so. Without a folder but with a GitHub repository entered, the update runs through
+  `BGInfo-Reloaded.exe --update`.
 - **Update on start:** if the loaded configuration names an update folder (`update.path`), the editor
   checks it on start. With `update.auto` it fetches newer files like `BGInfo-Reloaded.exe` does
   (including itself – active from the next start – and a newer configuration, which it then
