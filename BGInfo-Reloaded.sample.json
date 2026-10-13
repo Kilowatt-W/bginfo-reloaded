@@ -55,14 +55,15 @@
   "hosts": {
     // Computernamen mit * (beliebig viele Zeichen) und ? (genau ein Zeichen), Gross-/Kleinschreibung egal -
     // oder IP-Angaben: Adresse (10.10.1.5), Netz (10.10.0.0/16), Bereich (10.10.1.10-10.10.1.50, kurz 10.10.1.10-50).
-    // include (Whitelist): wenn nicht leer, erscheint das Panel nur auf passenden Rechnern.
-    // exclude (Blacklist): auf passenden Rechnern erscheint das Panel nicht - hat Vorrang vor include.
-    "include": [],
-    "exclude": [],   // z.B. ["KIOSK-*", "PC-0??", "*.dmz.firma.local", "10.10.99.0/24", "10.10.1.10-10.10.1.50"]
-    // Zusaetzlich oder stattdessen je Liste eine zentral gepflegte Textdatei (ein Eintrag je Zeile; Pfad, UNC
-    // oder URL, relativ zum Ordner dieser Datei) - wird bei jedem Lauf frisch gelesen:
-    // "includeFile": "\\\\fileserver.example.com\\share\\bginfo\\allowed_hosts.txt",
-    // "excludeFile": "\\\\fileserver.example.com\\share\\bginfo\\disallowed_hosts.txt",
+    // Platzhalter * und ? stehen an jeder Stelle (*-ts-*, mh-??-xama, *xama*); Gross-/Kleinschreibung spielt keine Rolle.
+    // Rechnergruppen, von oben nach unten geprueft - die erste passende entscheidet. Rechner ohne Gruppe
+    // bekommen diese Konfiguration. Beispiele (zum Benutzen in "groups" eintragen):
+    //   { "name": "Blacklist", "match": ["KIOSK-*", "PC-0??", "10.10.99.0/24"] }                          ohne "config": kein Panel
+    //   { "name": "Server",    "match": ["SRV-*"], "config": ".\\BGInfo-Server.json" }                     eigene Konfigurationsdatei
+    //   { "name": "Notebooks", "matchFile": "\\\\fileserver.example.com\\share\\bginfo\\notebooks.txt",    Liste aus einer Datei
+    //                          "config": "\\\\fileserver.example.com\\share\\bginfo\\notebook.json" }
+    //   { "name": "Verwaltung", "match": ["VW-*"], "mode": "ThisConfig" }                                  diese Konfiguration
+    "groups": [],
     // BackgroundOnly = Hintergrund ohne Panel setzen (Standard), Skip = Wallpaper gar nicht anfassen
     "onExcluded": "BackgroundOnly"
   },

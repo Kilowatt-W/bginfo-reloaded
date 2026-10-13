@@ -437,6 +437,7 @@ static class EntryPoint
                 {
                     WallpaperChoice.Override => $"(eigene Zuordnung fuer {size} aus wallpaper.byResolution)",
                     WallpaperChoice.ExactVariant => "(eigenes Bild fuer diese Aufloesung)",
+                    WallpaperChoice.DefaultVariant => $"(Standardbild: kein {Path.GetFileName(baseImage)}, deshalb die Fassung mit 1920x1080 im Namen; kein eigenes Bild fuer {size})",
                     WallpaperChoice.BestFit => $"(kein Bild fuer {size} und kein {Path.GetFileName(baseImage)} - am besten passendes Bild gewaehlt)",
                     _ when config.Wallpaper.ResolutionVariants => $"(kein {wanted} im selben Ordner gefunden)",
                     _ => "(wallpaper.resolutionVariants ist aus)"

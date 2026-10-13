@@ -25,7 +25,8 @@ Umgebungsvariable `BGINFORELOADED_CONFIG`.
   holt sein Fenster-Icon zur Laufzeit aus der eigenen exe.
 - **`backgrounds/`** – Demo-Hintergründe je Auflösung; die Beispielkonfiguration verweist darauf.
   Ein `background.jpg` ohne Auflösung gibt es dort absichtlich nicht (siehe
-  `WallpaperState.ResolveResolutionVariant`: sonst am besten passendes Bild).
+  `WallpaperState.ResolveResolutionVariant`: dann gilt `background_1920x1080.jpg` als Standardbild,
+  erst ohne dieses das am besten passende Bild).
 
 Hinweise, die nur für den Entwicklungsrechner gelten (lokaler Projektordner, Dateisynchronisation,
 Aufgabenverwaltung), stehen in `CLAUDE.local.md` – die Datei wird nicht eingecheckt. In dieses
@@ -184,19 +185,27 @@ echtes Windows nötig, das in dieser Entwicklungsumgebung nicht zur Verfügung s
   mehrere Optionen haben Standardwerte ungleich `false`/0/erster Enum-Wert; mit `WhenWritingDefault`
   ginge z.B. `scaleWithDpi: false` oder `fit: None` beim Speichern verloren.
 - **Welches Bild ein Monitor bekommt**, entscheidet allein `AppConfig.ResolveWallpaperFor` (eigene
-  Zuordnung aus `wallpaper.byResolution`, dann Datei mit Auflösung im Namen, dann Standardbild, dann
+  Zuordnung aus `wallpaper.byResolution`, dann Datei mit Auflösung im Namen, dann Standardbild (Datei
+  ohne Auflösung im Namen, sonst die Fassung mit 1920x1080 – `WallpaperState.FindDefaultImage`), dann
   am besten passende Fassung) – exe, Editor-Vorschau und die Liste im Editor fragen dieselbe Stelle.
   Gefundene Dateien werden nie in die JSON geschrieben, nur die eigenen Zuordnungen.
 - **Relative Pfade** in der Konfiguration (`wallpaper.path`) gelten relativ zu
   `AppConfig.BaseDirectory` (Ordner der Konfigurationsdatei) – immer über
   `ResolveWallpaperPath()` auflösen, nie über das Arbeitsverzeichnis.
-- **Rechnerlisten (`HostsConfig`)**: ein Eintrag ist Namensmuster oder IPv4-Angabe (Adresse, CIDR,
+- **Rechnergruppen (`HostsConfig.Groups`, seit 2.15.0)**: die Gruppen werden von oben nach unten
+  geprüft, die erste passende entscheidet – eigene Datei (`config`), diese Konfiguration
+  (`mode: ThisConfig`) oder kein Panel (ohne `config`). `AppConfig.Load` leitet über
+  `ResolveGroupConfig` auf die Gruppendatei um (Cache je Quelle, keine Verschachtelung: `hosts` der
+  Gruppendatei wird verworfen); der Editor öffnet Dateien direkt und leitet nie um. Das frühere
+  Format (`include`/`exclude` samt Listendateien) wird beim Laden über `MigrateLegacyLists` in
+  Gruppen umgewandelt – die alten Eigenschaften sind danach `null` und werden nicht mehr geschrieben.
+- **Einträge der Gruppen**: ein Eintrag ist Namensmuster oder IPv4-Angabe (Adresse, CIDR,
   Bereich). `TryParseAddressRange` ist absichtlich streng (vier Zahlen mit Punkten), damit Namen wie
   `pc-10` Namensmuster bleiben. Wer prüft, ob ein Eintrag auf den Rechner passt, nimmt
   `MatchesMachine` (nicht `Matches`) – so gelten IP-Angaben auch in `onlyOn`/`notOn`. Wird ein
   Standardkommentar in `ConfigWriter` umformuliert, den alten Text in `FormerComments` eintragen.
-  Listen aus `hosts.includeFile`/`excludeFile` liegen nur zur Laufzeit in `IncludeFromFile`/
-  `ExcludeFromFile` (`[JsonIgnore]`) – wie bei `include` ruft `AppConfig.Load` das Einlesen
+  Listen aus `matchFile` einer Gruppe liegen nur zur Laufzeit in `MatchFromFile`
+  (`[JsonIgnore]`) – wie bei `include` ruft `AppConfig.Load` das Einlesen
   (`ResolveHostFiles`) selbst auf, der Editor nur auf der Vorschau-Kopie. Der Cache je Listendatei
   trägt eine Kennung der Quelle im Namen, damit nie der Inhalt einer anderen Datei als Ersatz dient.
   Listen immer über `HostsConfig.Normalize` bereinigen (Doppelte, Leerzeilen).

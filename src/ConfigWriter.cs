@@ -61,6 +61,7 @@ internal static class ConfigWriter
         ["hosts.exclude"] = "Blacklist: auf passenden Rechnern kein Panel - hat Vorrang; Einträge wie bei include",
         ["hosts.includeFile"] = "Textdatei (Pfad, UNC, URL) mit weiteren Whitelist-Einträgen, ein Eintrag je Zeile; wird bei jedem Lauf gelesen",
         ["hosts.excludeFile"] = "Textdatei (Pfad, UNC, URL) mit weiteren Blacklist-Einträgen, ein Eintrag je Zeile; wird bei jedem Lauf gelesen",
+        ["hosts.groups"] = "Rechnergruppen, von oben nach unten geprüft - die erste passende entscheidet: \"config\" = eigene Datei, ohne \"config\" = kein Panel (Blacklist), \"mode\": \"ThisConfig\" = diese Datei. \"match\": Namen mit * und ? an jeder Stelle (*-ts-*, mh-??-xama), Groß-/Kleinschreibung egal, IP (10.1.1.5), Netz (10.1.0.0/16), Bereich (10.1.1.10-50); \"matchFile\": Liste aus einer Datei",
         ["hosts.onExcluded"] = "BackgroundOnly = Hintergrund ohne Panel setzen, Skip = Wallpaper nicht anfassen",
         ["border.color"] = "Rahmenfarbe (#RRGGBBAA)",
         ["border.width"] = "Strichstärke in Pixeln, 0 = kein Rahmen",
@@ -191,7 +192,20 @@ internal static class ConfigWriter
                 for (var j = 0; j < children.Count; j++)
                 {
                     var (childName, childValue) = children[j];
-                    AppendLine(text, "    ", $"{Quote(childName)}: {Compact(childValue, compact)}{(j < children.Count - 1 ? "," : "")}", $"{name}.{childName}");
+                    var childComma = j < children.Count - 1 ? "," : "";
+                    // Die Gruppen der Rechner: eine je Zeile, sonst stuende alles in einer einzigen langen.
+                    if (childValue is JsonArray groups && groups.Count > 0 && $"{name}.{childName}".Equals("hosts.groups", StringComparison.OrdinalIgnoreCase))
+                    {
+                        text.Append("    // ").AppendLine(Trailing["hosts.groups"]);
+                        text.AppendLine($"    {Quote(childName)}: [");
+                        for (var g = 0; g < groups.Count; g++)
+                        {
+                            text.AppendLine($"      {Compact(groups[g], compact)}{(g < groups.Count - 1 ? "," : "")}");
+                        }
+                        text.AppendLine($"    ]{childComma}");
+                        continue;
+                    }
+                    AppendLine(text, "    ", $"{Quote(childName)}: {Compact(childValue, compact)}{childComma}", $"{name}.{childName}");
                 }
                 text.AppendLine($"  }}{comma}");
             }

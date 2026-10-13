@@ -138,13 +138,67 @@ public enum ExcludedAction
 ///   (10.10.1.10-10.10.1.50, kurz 10.10.1.10-50), geprueft gegen alle IPv4-Adressen der aktiven
 ///   Netzwerkadapter des Rechners.
 /// </summary>
+/// <summary>Was fuer die Rechner einer Gruppe gilt.</summary>
+public enum HostGroupMode
+{
+    /// <summary>Mit "config": diese Datei gilt fuer die Gruppe. Ohne "config": kein Panel (Blacklist).</summary>
+    Auto,
+
+    /// <summary>Die Rechner der Gruppe bekommen diese (Haupt-)Konfiguration - wie frueher die Whitelist.</summary>
+    ThisConfig,
+
+    /// <summary>Kein Panel, auch wenn eine Datei eingetragen ist.</summary>
+    Exclude
+}
+
+/// <summary>
+/// Eine Gruppe von Rechnern (Namensmuster, IP-Angaben, optional aus einer Listendatei) und was fuer
+/// sie gilt: eine eigene Konfigurationsdatei, die Hauptkonfiguration oder gar kein Panel.
+/// </summary>
+public sealed class HostGroup
+{
+    public string Name { get; set; } = "";
+
+    /// <summary>Rechnernamen mit * und ?, IP-Adressen, Netze oder Bereiche - wie frueher in hosts.include/exclude.</summary>
+    public List<string> Match { get; set; } = new();
+
+    /// <summary>Weitere Eintraege aus einer Textdatei (Pfad, UNC, URL; relativ zur Konfiguration), bei jedem Lauf frisch gelesen.</summary>
+    public string? MatchFile { get; set; }
+
+    /// <summary>Konfigurationsdatei fuer diese Gruppe (Pfad, UNC, URL; relativ zur Hauptdatei). Leer = kein Panel.</summary>
+    public string? Config { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public HostGroupMode Mode { get; set; }
+
+    /// <summary>Aus MatchFile gelesene Eintraege - nur zur Laufzeit.</summary>
+    [JsonIgnore]
+    public List<string> MatchFromFile { get; set; } = new();
+
+    [JsonIgnore]
+    public bool UsesOwnConfig => Mode == HostGroupMode.Auto && !string.IsNullOrWhiteSpace(Config);
+
+    [JsonIgnore]
+    public bool Excludes => Mode == HostGroupMode.Exclude || (Mode == HostGroupMode.Auto && string.IsNullOrWhiteSpace(Config));
+}
+
 public sealed class HostsConfig
 {
-    /// <summary>Whitelist: wenn nicht leer, erscheint das Panel nur auf Rechnern, die auf eines der Muster passen.</summary>
-    public List<string> Include { get; set; } = new();
+    /// <summary>
+    /// Gruppen von Rechnern, von oben nach unten geprueft - die erste, auf die der Rechner passt,
+    /// entscheidet: eigene Konfigurationsdatei, diese Konfiguration oder kein Panel. Rechner ohne
+    /// Gruppe bekommen diese Konfiguration.
+    /// </summary>
+    public List<HostGroup> Groups { get; set; } = new();
 
-    /// <summary>Blacklist: auf passenden Rechnern erscheint das Panel nicht - hat Vorrang vor der Whitelist.</summary>
-    public List<string> Exclude { get; set; } = new();
+    // Frueheres Format (bis 2.14): getrennte White- und Blacklist. Wird weiter gelesen und beim Laden
+    // in Gruppen umgewandelt (MigrateLegacyLists); geschrieben werden nur noch Gruppen.
+
+    /// <summary>Frueher: Whitelist. Siehe <see cref="MigrateLegacyLists"/>.</summary>
+    public List<string>? Include { get; set; }
+
+    /// <summary>Frueher: Blacklist. Siehe <see cref="MigrateLegacyLists"/>.</summary>
+    public List<string>? Exclude { get; set; }
 
     /// <summary>
     /// Textdatei (Pfad, UNC oder http(s)-URL; relativ zum Ordner der Konfigurationsdatei) mit weiteren
@@ -159,38 +213,65 @@ public sealed class HostsConfig
 
     public ExcludedAction OnExcluded { get; set; } = ExcludedAction.BackgroundOnly;
 
-    /// <summary>Aus IncludeFile gelesene Eintraege - nur zur Laufzeit, wird nie gespeichert.</summary>
-    [JsonIgnore]
-    public List<string> IncludeFromFile { get; set; } = new();
+    public const string BlacklistName = "Blacklist";
+    public const string WhitelistName = "Whitelist";
+    public const string OthersName = "Alle anderen";
 
-    /// <summary>Aus ExcludeFile gelesene Eintraege - nur zur Laufzeit, wird nie gespeichert.</summary>
-    [JsonIgnore]
-    public List<string> ExcludeFromFile { get; set; } = new();
+    /// <summary>
+    /// Wandelt das fruehere Format (include/exclude samt Listendateien) in Gruppen um und leert die
+    /// alten Felder: die Blacklist wird eine Gruppe ohne Konfiguration ganz oben (sie hatte Vorrang),
+    /// die Whitelist eine Gruppe "diese Konfiguration", gefolgt von "Alle anderen" ohne Panel - denn
+    /// mit einer Whitelist bekam nur sie das Panel. Mehrfach aufrufen schadet nicht.
+    /// </summary>
+    public void MigrateLegacyLists()
+    {
+        Groups ??= new();
+        var hasExclude = Exclude is { Count: > 0 } || !string.IsNullOrWhiteSpace(ExcludeFile);
+        var hasInclude = Include is { Count: > 0 } || !string.IsNullOrWhiteSpace(IncludeFile);
+        var front = new List<HostGroup>();
+        if (hasExclude)
+        {
+            front.Add(new HostGroup { Name = BlacklistName, Match = Normalize(Exclude ?? new()), MatchFile = ExcludeFile });
+        }
+        if (hasInclude)
+        {
+            front.Add(new HostGroup { Name = WhitelistName, Match = Normalize(Include ?? new()), MatchFile = IncludeFile, Mode = HostGroupMode.ThisConfig });
+        }
+        Groups.InsertRange(0, front);
+        if (hasInclude)
+        {
+            Groups.Add(new HostGroup { Name = OthersName, Match = new() { "*" } });
+        }
+        Include = Exclude = null;
+        IncludeFile = ExcludeFile = null;
+    }
+
+    /// <summary>Die erste Gruppe, auf die dieser Rechner passt, mit dem Eintrag, der gepasst hat - oder null.</summary>
+    public HostGroup? FindGroup(IReadOnlyCollection<string> hostNames, out string matchedBy)
+    {
+        var addresses = LocalAddresses();
+        foreach (var group in Groups ?? new())
+        {
+            var hit = group.Match.Concat(group.MatchFromFile).FirstOrDefault(pattern => MatchesMachine(pattern, hostNames, addresses));
+            if (hit != null)
+            {
+                matchedBy = hit;
+                return group;
+            }
+        }
+        matchedBy = "";
+        return null;
+    }
 
     /// <summary>Darf das Panel auf diesem Rechner erscheinen? Wenn nicht, nennt <paramref name="reason"/> den Grund.</summary>
     public bool Allows(IReadOnlyCollection<string> hostNames, out string reason)
     {
-        var addresses = LocalAddresses();
-        var excludedBy = Exclude.FirstOrDefault(pattern => MatchesMachine(pattern, hostNames, addresses));
-        if (excludedBy != null)
+        var group = FindGroup(hostNames, out var matchedBy);
+        if (group is { Excludes: true })
         {
-            reason = $"passt auf hosts.exclude \"{excludedBy}\"";
+            reason = $"steht in der Gruppe „{group.Name}“ ohne Konfiguration (passt auf \"{matchedBy}\")";
             return false;
         }
-        excludedBy = ExcludeFromFile.FirstOrDefault(pattern => MatchesMachine(pattern, hostNames, addresses));
-        if (excludedBy != null)
-        {
-            reason = $"passt auf \"{excludedBy}\" aus hosts.excludeFile";
-            return false;
-        }
-
-        var include = Include.Concat(IncludeFromFile).Where(pattern => !string.IsNullOrWhiteSpace(pattern)).ToList();
-        if (include.Count > 0 && !include.Any(pattern => MatchesMachine(pattern, hostNames, addresses)))
-        {
-            reason = "passt auf keinen Eintrag in hosts.include" + (IncludeFromFile.Count > 0 ? " bzw. hosts.includeFile" : "");
-            return false;
-        }
-
         reason = "";
         return true;
     }
@@ -405,6 +486,9 @@ public enum WallpaperChoice
     Override,
     ExactVariant,
     Base,
+
+    /// <summary>Kein Bild ohne Aufloesung im Namen: die Fassung mit 1920x1080 im Namen gilt als Standardbild.</summary>
+    DefaultVariant,
     BestFit
 }
 
@@ -771,22 +855,28 @@ public sealed class AppConfig
         {
             return (null, WallpaperChoice.None);
         }
+        // Standardbild: die Datei ohne Aufloesung im Namen, sonst die Fassung mit 1920x1080 im Namen.
+        var standard = WallpaperState.FindDefaultImage(baseImage);
+        var standardChoice = string.Equals(standard, baseImage, StringComparison.OrdinalIgnoreCase) ? WallpaperChoice.Base : WallpaperChoice.DefaultVariant;
         if (!Wallpaper.ResolutionVariants)
         {
-            return File.Exists(baseImage) ? (baseImage, WallpaperChoice.Base) : (null, WallpaperChoice.None);
+            return standard != null ? (standard, standardChoice) : (null, WallpaperChoice.None);
         }
         var image = WallpaperState.ResolveResolutionVariant(baseImage, width, height);
         if (!File.Exists(image))
         {
             return (null, WallpaperChoice.None);
         }
-        if (string.Equals(image, baseImage, StringComparison.OrdinalIgnoreCase))
+        if (Path.GetFileNameWithoutExtension(image).EndsWith(key, StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(image, baseImage, StringComparison.OrdinalIgnoreCase))
         {
-            return (image, WallpaperChoice.Base);
+            return (image, WallpaperChoice.ExactVariant);
         }
-        return (image, Path.GetFileNameWithoutExtension(image).EndsWith(key, StringComparison.OrdinalIgnoreCase)
-            ? WallpaperChoice.ExactVariant
-            : WallpaperChoice.BestFit);
+        if (string.Equals(image, standard, StringComparison.OrdinalIgnoreCase))
+        {
+            return (image, standardChoice);
+        }
+        return (image, WallpaperChoice.BestFit);
     }
 
     /// <summary>update.path mit aufgeloesten Umgebungsvariablen, relativ zu <see cref="BaseDirectory"/>; null, wenn keiner konfiguriert ist.</summary>
@@ -839,28 +929,86 @@ public sealed class AppConfig
     public static (AppConfig Config, string Source) Load(string? explicitSource)
     {
         var (config, source) = LoadFile(explicitSource);
-        if (config.ResolveInclude() is { } note)
-        {
-            Console.WriteLine(note);
-        }
+        // Erst die Listendateien: sie entscheiden mit, in welche Gruppe der Rechner faellt.
         foreach (var hostNote in config.ResolveHostFiles())
         {
             Console.WriteLine(hostNote);
+        }
+        if (config.ResolveGroupConfig() is { } groupConfig)
+        {
+            (config, source) = groupConfig;
+        }
+        if (config.ResolveInclude() is { } note)
+        {
+            Console.WriteLine(note);
         }
         return (config, source);
     }
 
     /// <summary>
+    /// Faellt dieser Rechner in eine Gruppe mit eigener Konfigurationsdatei, wird diese geladen und
+    /// gilt vollstaendig. Nicht erreichbar: zuletzt gelesene Fassung aus dem Cache, sonst bleibt es
+    /// (mit Warnung) bei dieser Konfiguration. Gruppen in der Gruppendatei werden nicht ausgewertet -
+    /// keine Verschachtelung, keine Schleifen. Null, wenn keine Gruppendatei gilt.
+    /// </summary>
+    public (AppConfig Config, string Source)? ResolveGroupConfig()
+    {
+        var hostNames = new[] { Environment.MachineName, new ValueResolver().Expand("{fqdn}") };
+        var group = Hosts.FindGroup(hostNames, out var matchedBy);
+        if (group is not { UsesOwnConfig: true })
+        {
+            return null;
+        }
+
+        var source = Environment.ExpandEnvironmentVariables(group.Config!.Trim());
+        if (!IsUrl(source) && !Path.IsPathRooted(source))
+        {
+            source = Path.GetFullPath(Path.Combine(BaseDirectory, source));
+        }
+        var sourceId = Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(
+            System.Text.Encoding.UTF8.GetBytes(source.ToLowerInvariant())))[..8];
+        var cacheFile = Path.Combine(WallpaperState.StateDirectory, $"group.{sourceId}.cache.json");
+
+        string json;
+        var shownSource = source;
+        try
+        {
+            json = ReadSource(source);
+            TryWriteCache(cacheFile, json);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or HttpRequestException or TaskCanceledException)
+        {
+            if (!File.Exists(cacheFile))
+            {
+                Console.WriteLine($"Warnung: Konfiguration der Gruppe „{group.Name}“ '{source}' nicht erreichbar ({ex.Message}) und kein Cache vorhanden - verwende die Hauptkonfiguration.");
+                return null;
+            }
+            Console.WriteLine($"Warnung: Konfiguration der Gruppe „{group.Name}“ '{source}' nicht erreichbar ({ex.Message}) - verwende lokalen Cache.");
+            json = File.ReadAllText(cacheFile);
+            shownSource = $"{cacheFile} (Cache von {source})";
+        }
+
+        var config = Parse(json, source);
+        // Die Zuordnung hat die Hauptdatei getroffen; Listen und Gruppen der Gruppendatei gelten nicht.
+        config.Hosts = new HostsConfig { OnExcluded = config.Hosts.OnExcluded };
+        Console.WriteLine($"Gruppe „{group.Name}“ (passt auf \"{matchedBy}\"): verwende {source}");
+        return (config, shownSource);
+    }
+
+    /// <summary>
     /// Liest die Listendateien aus hosts.includeFile / hosts.excludeFile in die Laufzeitlisten
-    /// (IncludeFromFile / ExcludeFromFile). Ist eine Datei nicht erreichbar, gilt die zuletzt gelesene
+    /// der Gruppen (MatchFromFile). Ist eine Datei nicht erreichbar, gilt die zuletzt gelesene
     /// Fassung aus dem lokalen Cache; gibt es keinen, fehlen ihre Eintraege (mit Warnung). Liefert
     /// Hinweistexte fuer das Log. Der Editor ruft das nur fuer die Vorschau-Kopie auf.
     /// </summary>
     public List<string> ResolveHostFiles()
     {
         var notes = new List<string>();
-        Hosts.IncludeFromFile = ReadHostFile(Hosts.IncludeFile, "Whitelist", "hosts.include", notes);
-        Hosts.ExcludeFromFile = ReadHostFile(Hosts.ExcludeFile, "Blacklist", "hosts.exclude", notes);
+        Hosts.MigrateLegacyLists();
+        foreach (var group in Hosts.Groups)
+        {
+            group.MatchFromFile = ReadHostFile(group.MatchFile, $"Gruppe „{group.Name}“: Listen", "hosts.group", notes);
+        }
         return notes;
     }
 
@@ -1125,6 +1273,8 @@ public sealed class AppConfig
             config.Items ??= new();
             config.Format ??= new();
             config.Border ??= new();
+            config.Hosts ??= new();
+            config.Hosts.MigrateLegacyLists();
             return config;
         }
         catch (JsonException ex)

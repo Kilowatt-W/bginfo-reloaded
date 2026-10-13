@@ -27,8 +27,8 @@ Technische Hintergründe, Lizenzhinweise und der Vergleich zu PowerBGInfo stehen
   Dateien anzeigen.
 - **Zentral verteilbar** – Konfiguration von UNC-Share oder http(s)-URL, mit lokalem Cache für
   Rechner ohne Netzverbindung.
-- **White-/Blacklist** – das Panel per Computernamen-Muster (`*`, `?`) auf Rechnern ein- oder
-  ausschließen.
+- **Rechnergruppen** – Rechner nach Namensmuster (`*`, `?`) oder IP-Bereich zu Gruppen fassen; jede
+  Gruppe bekommt eine eigene Konfigurationsdatei, die Hauptkonfiguration oder gar kein Panel.
 - **Autostart** – Scheduled Tasks bei Anmeldung und in festem Intervall, ohne Admin-Rechte.
 - **Fensterlos** – im Task-Betrieb erscheint kein Konsolenfenster.
 - **Logdatei** – jeder Lauf wird protokolliert, Fehler sind nachvollziehbar.
@@ -71,7 +71,7 @@ BGInfo-Reloaded-Editor.exe BGInfo-Reloaded.json      eine vorhandene Datei öffn
   Taskleiste, runde Ecken, Schatten, Farben, Deckkraft, Schrift.
 - **Hintergrund:** Bilddatei, Anpassung an die Auflösung, Bild je Auflösung, Verhalten bei mehreren
   Monitoren.
-- **Rechner:** White- und Blacklist.
+- **Rechner:** Rechnergruppen mit eigener Konfiguration bzw. ohne Panel (früher White- und Blacklist).
 - **Datei und Felder:** Version und Beschreibung der Datei, zentrale Datei (`include`), eigene Felder.
 - **Autostart und Werkzeuge:** Autostart-Tasks einrichten und entfernen (Intervall, `--watch`),
   Vorschau als Bilddatei speichern, Logdatei und Datenordner öffnen.
@@ -214,8 +214,8 @@ Welche Quelle benutzt wurde, steht in der Ausgabe und im Log (`Konfiguration: �
 Der Editor hält sich an dieselbe Reihenfolge: Ohne Dateiangabe öffnet er die Datei, die auch
 `BGInfo-Reloaded.exe` benutzen würde (eine per Umgebungsvariable genannte URL überspringt er). Gibt
 es keine, fragt er beim Start: **Standard-Konfiguration erstellen** (legt eine
-`BGInfo-Reloaded.json` mit allen Einstellungen in ihren Standardwerten und leerer White- und
-Blacklist im Ordner des Programms an und öffnet sie), **vorhandene Konfiguration laden** oder
+`BGInfo-Reloaded.json` mit allen Einstellungen in ihren Standardwerten und ohne
+Rechnergruppen im Ordner des Programms an und öffnet sie), **vorhandene Konfiguration laden** oder
 **ohne Datei beginnen**. Ist der Programmordner nicht beschreibbar, lässt er den Speicherort wählen. In der Fußzeile steht der Dateiname; der volle Pfad
 erscheint, wenn die Maus darauf zeigt.
 
@@ -279,8 +279,10 @@ Vorlage liegt in [BGInfo-Reloaded.sample.json](BGInfo-Reloaded.sample.json).
     "panel": "All"                               // All = Panel auf jedem Monitor, Primary = nur einmal
   },
   "hosts": {
-    "include": [],                               // Whitelist von Computernamen, * und ? erlaubt
-    "exclude": ["KIOSK-*", "PC-0??"],            // Blacklist, hat Vorrang
+    "groups": [                                  // Rechnergruppen, die erste passende entscheidet
+      { "name": "Blacklist", "match": ["KIOSK-*", "PC-0??"] },                  // ohne "config": kein Panel
+      { "name": "Server", "match": ["SRV-*"], "config": ".\\BGInfo-Server.json" } // eigene Konfiguration
+    ],
     "onExcluded": "BackgroundOnly"               // oder "Skip"
   },
   "update": {
@@ -456,7 +458,11 @@ hinterlegen:
 ```
 
 Reihenfolge je Monitor: eigene Zuordnung für genau diese Auflösung, dann die Datei mit dieser
-Auflösung im Namen, dann das Bild ohne Zusatz, dann die am besten passende andere Fassung. Das gilt
+Auflösung im Namen, dann das Standardbild, dann die am besten passende andere Fassung.
+
+**Standardbild** ist die Datei ohne Auflösung im Namen (`Wallpaper.jpg`). Gibt es sie nicht, gilt
+die Fassung mit 1920x1080 im Namen (`Wallpaper_1920x1080.jpg`) als Standard – 1920 × 1080 ist die
+Standardauflösung. Erst wenn es auch die nicht gibt, wird die am besten passende Fassung gesucht. Das gilt
 bei jedem Lauf – auch wenn `--watch` nach einem Wechsel der Auflösung neu rendert. Fehlt die Datei
 einer Zuordnung, gibt es eine Warnung im Log und es geht mit dem nächsten Schritt weiter.
 
@@ -465,7 +471,8 @@ seiner tatsächlichen Auflösung, die eigenen Zuordnungen,
 die im Ordner gefundenen Fassungen und für jeden angeschlossenen Monitor, welches Bild er bekommt.
 Zuordnungen lassen sich dort hinzufügen, ändern und entfernen. Wird ein Bild gewählt, das schon eine
 Auflösung im Namen trägt (`Wallpaper_1920x1080.jpg`), trägt der Editor `Wallpaper.jpg` ein – unter
-diesem Namen werden alle Fassungen gefunden; die Datei selbst muss es nicht geben.
+diesem Namen werden alle Fassungen gefunden; die Datei selbst muss es nicht geben. Eine Meldung
+sagt dabei, welche Datei jetzt als Standardbild gilt.
 
 ### Mehrere Monitore (`monitors`)
 
@@ -489,21 +496,51 @@ erscheint das Panel auf der einfarbigen Fläche aus `backgroundColor`.
 Ist die konfigurierte Schrift nicht installiert, wird automatisch auf Consolas, Segoe UI, Tahoma,
 Arial oder Verdana ausgewichen. Backslashes müssen in JSON verdoppelt werden (`\\`).
 
-### Rechner ein- oder ausschließen (`hosts`)
+### Rechnergruppen: wer welche Konfiguration bekommt (`hosts`)
 
-Mit einer zentralen Konfiguration lässt sich steuern, auf welchen Rechnern das Info-Panel erscheint.
+Mit einer zentralen Konfiguration lässt sich steuern, welche Rechner welche Konfiguration bekommen
+– und welche gar kein Panel. Dafür gibt es Gruppen, die von oben nach unten geprüft werden. Die
+erste Gruppe, auf die ein Rechner passt, entscheidet:
 
-| Einstellung | Wirkung |
+```jsonc
+"hosts": {
+  "groups": [
+    { "name": "Blacklist",  "match": ["KIOSK-*", "10.10.99.0/24"] },                                   // ohne "config": kein Panel
+    { "name": "Server",     "match": ["SRV-*", "10.10.20.0/24"], "config": ".\\BGInfo-Server.json" },   // eigene Datei
+    { "name": "Notebooks",  "matchFile": "\\\\fileserver.example.com\\share\\bginfo\\notebooks.txt",
+                            "config": "\\\\fileserver.example.com\\share\\bginfo\\notebook.json" },
+    { "name": "Verwaltung", "match": ["VW-*"], "mode": "ThisConfig" }                                  // diese Konfiguration
+  ],
+  "onExcluded": "BackgroundOnly"
+}
+```
+
+| Angabe | Wirkung |
 |---|---|
-| `include` | Whitelist. Ist sie nicht leer, erscheint das Panel nur auf Rechnern, auf die einer der Einträge passt. |
-| `exclude` | Blacklist. Auf passenden Rechnern erscheint das Panel nicht. Hat Vorrang vor `include`. |
-| `onExcluded` | Was auf ausgeschlossenen Rechnern passiert: `BackgroundOnly` (Standard) setzt den Hintergrund wie konfiguriert, nur ohne Panel – das entfernt auch ein früher gesetztes Panel. `Skip` lässt das Wallpaper völlig unangetastet. |
+| `name` | frei wählbar, erscheint im Log und im Editor |
+| `match` | Rechnernamen und IP-Angaben der Gruppe (siehe unten) |
+| `matchFile` | weitere Einträge aus einer Textdatei (Pfad, UNC, URL; relativ zur Konfigurationsdatei), bei jedem Lauf frisch gelesen |
+| `config` | Konfigurationsdatei für diese Rechner (Pfad, UNC, URL; relativ zur Hauptdatei). Sie gilt für die Gruppe vollständig: Inhalt, Aussehen, Hintergrund |
+| ohne `config` | kein Panel – die frühere Blacklist |
+| `"mode": "ThisConfig"` | die Rechner der Gruppe bekommen diese (Haupt-)Konfiguration – die frühere Whitelist |
+| `"mode": "Exclude"` | kein Panel, auch wenn eine Datei eingetragen ist |
+| `onExcluded` | Was auf Rechnern ohne Panel passiert: `BackgroundOnly` (Standard) setzt den Hintergrund wie konfiguriert, nur ohne Panel – das entfernt auch ein früher gesetztes Panel. `Skip` lässt das Wallpaper völlig unangetastet. |
 
-Ein Eintrag ist entweder ein Rechnername oder eine IP-Angabe; beides gilt in beiden Listen:
+- Rechner, die in keiner Gruppe stehen, bekommen die Hauptkonfiguration.
+- Die Reihenfolge entscheidet: steht ein Rechner in zwei Gruppen, gilt die obere. Eine Gruppe ohne
+  Konfiguration ganz oben wirkt deshalb wie eine Blacklist mit Vorrang.
+- Ein `*` als einziger Eintrag passt auf alle Rechner. Als letzte Gruppe ohne `config` heißt das:
+  alle übrigen Rechner bekommen kein Panel (so wirkte früher eine Whitelist).
+- In der Datei einer Gruppe werden `groups` nicht ausgewertet – die Zuordnung trifft allein die
+  Hauptdatei, es gibt keine Verschachtelung.
+- Ist die Datei einer Gruppe nicht erreichbar, gilt die zuletzt gelesene Fassung aus dem lokalen
+  Cache; gibt es noch keinen, bleibt es mit einer Warnung im Log bei der Hauptkonfiguration.
+
+Ein Eintrag in `match` oder in der Listendatei ist entweder ein Rechnername oder eine IP-Angabe:
 
 | Eintrag | Beispiel | Geprüft gegen |
 |---|---|---|
-| Name, auch mit `*` (beliebig viele Zeichen) und `?` (genau ein Zeichen) | `SRV-*`, `PC-0??`, `*.dmz.firma.local` | Rechnername und voll qualifizierter Name; Groß-/Kleinschreibung egal |
+| Name, auch mit `*` (beliebig viele Zeichen) und `?` (genau ein Zeichen), an jeder Stelle und auch mehrfach | `SRV-*`, `PC-0??`, `*-ts-*`, `mh-??-xama`, `*xama*`, `*.dmz.firma.local` | Rechnername und voll qualifizierter Name; Groß- und Kleinschreibung spielt keine Rolle (`*-TS-*` passt auch auf `mh-ts-01`) |
 | einzelne IP-Adresse | `10.10.1.5` | alle IPv4-Adressen der aktiven Netzwerkadapter |
 | Netz | `10.10.0.0/16` | ebenso |
 | Bereich | `10.10.1.10-10.10.1.50`, kurz `10.10.1.10-50` | ebenso |
@@ -511,48 +548,29 @@ Ein Eintrag ist entweder ein Rechnername oder eine IP-Angabe; beides gilt in bei
 Hat ein Rechner mehrere Adressen, genügt ein Treffer. Unterstützt wird IPv4. Ein Namensmuster wird
 zusätzlich gegen die Adressen als Text geprüft, `10.10.*` funktioniert also auch.
 
-```jsonc
-"hosts": { "exclude": ["KIOSK-*", "PC-0??"] }                    // überall außer auf diesen
-"hosts": { "include": ["SRV-*"], "exclude": ["SRV-TEST*"] }       // nur Server, aber keine Testserver
-"hosts": { "include": ["10.10.0.0/16"], "exclude": ["10.10.99.1-10.10.99.254"] }   // nach Netzen
-```
+**Im Editor (Reiter „Rechner“):** eine Tabelle zeigt die Gruppen mit Einträgen und Wirkung. Gruppen
+lassen sich hinzufügen, ändern, entfernen und in der Reihenfolge verschieben; „Konfiguration der
+Gruppe öffnen“ öffnet deren Datei und legt sie, wenn es sie noch nicht gibt, als Kopie der
+geöffneten Konfiguration an. Im Dialog einer Gruppe gibt es „Importieren…“ und „Exportieren…“ für
+die Einträge: eine Textdatei mit einem Eintrag je Zeile (auch durch Komma oder Semikolon getrennt);
+Leerzeilen und Zeilen, die mit `#` oder `//` beginnen, werden übergangen, Doppelte entfernt. Unter
+der Tabelle steht, in welche Gruppe der eigene Rechner fällt.
 
-**Import und Export:** Im Editor hat jede Liste die Knöpfe „Importieren…“ und „Exportieren…“. Der
-Import liest eine Textdatei mit einem Eintrag je Zeile (auch durch Komma oder Semikolon getrennt);
-Leerzeilen und Zeilen, die mit `#` oder `//` beginnen, werden übergangen, Doppelte entfernt. Hat die
-Liste schon Einträge, fragt der Editor, ob angehängt oder ersetzt werden soll. Der Export schreibt
-dieselbe Form. Die Einträge stehen danach in der `BGInfo-Reloaded.json` – eine später geänderte
-Textdatei muss neu importiert werden. Doppelte Einträge (auch bei abweichender
-Groß-/Kleinschreibung) werden beim Import, beim Verlassen des Eingabefelds und beim Speichern
-entfernt.
+**Listendatei (`matchFile`):** dieselbe Form wie beim Import. Es gilt die Summe aus `match` und
+Datei. Ist die Datei nicht erreichbar, gilt die zuletzt gelesene Fassung aus einem lokalen Cache
+(`%LOCALAPPDATA%\BGInfo-Reloaded\hosts.….cache.txt`); gibt es noch keinen, fehlen ihre Einträge, und
+im Log steht eine Warnung. Eine eigene Datei lohnt sich, wenn die Liste oft geändert oder von
+anderen Personen gepflegt wird als die Konfiguration.
 
-**Liste in einer eigenen Datei:** Statt (oder zusätzlich zu) den Listen in der Konfiguration lässt
-sich je Liste eine Textdatei angeben, die bei jedem Lauf frisch gelesen wird:
+**Früheres Format:** bis Version 2.14 gab es getrennte Listen `include`/`exclude` (samt
+`includeFile`/`excludeFile`). Solche Dateien werden weiter gelesen: aus der Blacklist wird die
+Gruppe „Blacklist“ ganz oben, aus der Whitelist die Gruppe „Whitelist“ mit `"mode": "ThisConfig"`,
+gefolgt von „Alle anderen“ ohne Panel. Beim Speichern im Editor stehen danach nur noch Gruppen in
+der Datei.
 
-```jsonc
-"hosts": {
-  "exclude": ["KIOSK-*"],                                             // direkt in der Konfiguration
-  "excludeFile": "\\\\fileserver.example.com\\share\\bginfo\\disallowed_hosts.txt",   // zusätzlich aus einer Datei
-  "includeFile": ".\\allowed_hosts.txt"                               // relativ zur Konfigurationsdatei
-}
-```
-
-- Die Datei hat dieselbe Form wie beim Import: ein Eintrag je Zeile, Namen oder IP-Angaben,
-  Kommentarzeilen mit `#` oder `//`.
-- Es gilt die Summe aus Liste und Datei. Pfad, UNC-Share oder http(s)-URL sind möglich.
-- Ist die Datei nicht erreichbar, gilt die zuletzt gelesene Fassung aus einem lokalen Cache
-  (`%LOCALAPPDATA%\BGInfo-Reloaded\hosts.….cache.txt`); gibt es noch keinen, fehlen ihre Einträge,
-  und im Log steht eine Warnung.
-- Im Log steht bei jedem Lauf, welche Datei mit wie vielen Einträgen gelesen wurde.
-
-Wann welcher Weg passt: Eine eigene Datei lohnt sich, wenn die Liste oft geändert wird oder von
-anderen Personen gepflegt wird als die Konfiguration – eine Änderung wirkt dann beim nächsten Lauf
-auf allen Rechnern, ohne die `BGInfo-Reloaded.json` neu zu verteilen. Wenige, selten geänderte
-Einträge sind in der Konfiguration selbst besser aufgehoben; sie funktionieren auch ohne Netz.
-
-Ob und warum ein Rechner ausgeschlossen ist, steht in der Ausgabe und im Log
-(`Info-Panel auf diesem Rechner abgeschaltet: …`). Bei `Skip` bleibt ein früher gesetztes Panel
-stehen, bis das Wallpaper anderweitig geändert wird.
+Ob und warum ein Rechner kein Panel bekommt oder welche Gruppendatei gilt, steht in der Ausgabe und
+im Log (`Info-Panel auf diesem Rechner abgeschaltet: …`, `Gruppe „…“ (passt auf …): verwende …`).
+Bei `Skip` bleibt ein früher gesetztes Panel stehen, bis das Wallpaper anderweitig geändert wird.
 
 ### Zeilen (`items`)
 
@@ -728,8 +746,8 @@ wie an jeder Zeile (`onlyOn`, `notOn`, `when`); Blöcke dürfen verschachtelt we
 Block können zusätzlich eigene Filter tragen.
 
 So kann eine einzige zentrale Datei Zeilen enthalten, die nur auf Servern, nur an einem Standort
-oder nur auf bestimmten Rechnern erscheinen. `hosts.include`/`hosts.exclude` schalten dagegen das
-ganze Panel ab.
+oder nur auf bestimmten Rechnern erscheinen. Die Gruppen unter `hosts` schalten dagegen das
+ganze Panel ab oder weisen eine ganz andere Konfigurationsdatei zu.
 
 ### Konfiguration testen
 

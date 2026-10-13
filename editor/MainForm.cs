@@ -647,7 +647,20 @@ public sealed class MainForm : Form
                 path.Text = sameFolder ? @".\" + Path.GetFileName(chosen) : chosen;
                 if (!string.Equals(chosen, dialog.FileName, StringComparison.OrdinalIgnoreCase))
                 {
-                    _status.Text = $"{Path.GetFileName(dialog.FileName)} trägt eine Auflösung im Namen – eingetragen ist {Path.GetFileName(chosen)}, die Fassungen je Auflösung stehen in der Liste darunter.";
+                    // Sagen, welche Datei jetzt als Standard gilt: die ohne Aufloesung im Namen, sonst die mit 1920x1080.
+                    var standard = WallpaperState.FindDefaultImage(chosen);
+                    var which = standard == null ? "ein Standardbild gibt es nicht, es gilt die am besten passende Fassung"
+                        : string.Equals(standard, chosen, StringComparison.OrdinalIgnoreCase) ? $"als Standard gilt {Path.GetFileName(chosen)} (die Datei ohne Auflösung im Namen)"
+                        : $"{Path.GetFileName(chosen)} gibt es nicht, als Standard gilt deshalb {Path.GetFileName(standard)}";
+                    _status.Text = $"{Path.GetFileName(dialog.FileName)} trägt eine Auflösung im Namen – eingetragen ist {Path.GetFileName(chosen)}; {which}.";
+                    MessageBox.Show(this,
+                        $"{Path.GetFileName(dialog.FileName)} trägt eine Auflösung im Namen.\r\n\r\n" +
+                        $"Eingetragen ist deshalb {Path.GetFileName(chosen)} – unter diesem Namen werden alle Fassungen je Auflösung gefunden.\r\n\r\n" +
+                        (standard == null ? "Ein Standardbild gibt es nicht: Monitore ohne eigenes Bild bekommen die am besten passende Fassung."
+                            : string.Equals(standard, chosen, StringComparison.OrdinalIgnoreCase)
+                                ? $"Als Standardbild für alle Auflösungen ohne eigenes Bild gilt {Path.GetFileName(chosen)} – die Datei ohne Auflösung im Namen."
+                                : $"{Path.GetFileName(chosen)} gibt es nicht. Als Standardbild für alle Auflösungen ohne eigenes Bild gilt deshalb {Path.GetFileName(standard)} (1920 × 1080 ist die Standardauflösung)."),
+                        AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
             }
         };
@@ -690,7 +703,7 @@ public sealed class MainForm : Form
         ResolutionButton("Neu einlesen", "Den Ordner des Bildes erneut durchsuchen", RefreshResolutionList);
         Row(table, "", _resolutions);
         Row(table, "", resolutionButtons);
-        Row(table, "", Hint("Gefunden werden Dateien neben dem Bild oben, die dessen Namen mit angehängter Auflösung tragen (bild_3440x1440.jpg).\r\nEine eigene Zuordnung hat Vorrang und gilt auch für Auflösungen ohne passende Datei. Gespeichert werden nur die eigenen Zuordnungen;\r\ndie Dateien im Ordner sucht das Programm bei jedem Lauf frisch – auch nach einem Wechsel der Auflösung."));
+        Row(table, "", Hint("Als Standardbild gilt die Datei ohne Auflösung im Namen (bild.jpg). Gibt es sie nicht, gilt die Fassung mit 1920x1080 im Namen als Standard.\r\nGefunden werden Dateien neben dem Bild oben, die dessen Namen mit angehängter Auflösung tragen (bild_3440x1440.jpg).\r\nEine eigene Zuordnung hat Vorrang und gilt auch für Auflösungen ohne passende Datei. Gespeichert werden nur die eigenen Zuordnungen;\r\ndie Dateien im Ordner sucht das Programm bei jedem Lauf frisch – auch nach einem Wechsel der Auflösung."));
         _loaders.Add(RefreshResolutionList);
         path.TextChanged += (_, _) => RefreshResolutionList();
 
@@ -710,152 +723,365 @@ public sealed class MainForm : Form
         return ScrollPage("Hintergrund", table);
     }
 
+    // Reiter "Rechner": die Gruppen in der Reihenfolge, in der sie geprueft werden.
+    private readonly ListView _groups = new() { View = View.Details, FullRowSelect = true, MultiSelect = false, HideSelection = false, ShowItemToolTips = true };
+    private readonly Label _groupOfThisMachine = new() { AutoSize = true, ForeColor = SystemColors.GrayText };
+
     private TabPage BuildHostsTab()
     {
         var table = NewFormTable();
 
-        Heading(table, "Auf welchen Rechnern das Info-Panel erscheint");
-        Row(table, "", Hint("Ein Eintrag je Zeile – Rechnername oder IP-Angabe:\r\n" +
-            "• Name mit Platzhaltern: * = beliebig viele Zeichen, ? = genau ein Zeichen (SRV-*, PC-0??, *.dmz.firma.local)\r\n" +
-            "• IP-Adresse (10.10.1.5), Netz (10.10.0.0/16) oder Bereich (10.10.1.10-10.10.1.50, kurz 10.10.1.10-50)\r\n" +
-            "Groß-/Kleinschreibung ist egal. Namen werden gegen Rechnername und voll qualifizierten Namen geprüft,\r\n" +
-            "IP-Angaben gegen alle IPv4-Adressen der aktiven Netzwerkadapter."));
+        Heading(table, "Rechnergruppen – welche Rechner welche Konfiguration bekommen");
+        Row(table, "", Hint("Die Gruppen werden von oben nach unten geprüft; die erste, auf die ein Rechner passt, entscheidet:\r\n" +
+            "• eigene Konfigurationsdatei – sie gilt für diese Rechner vollständig (Inhalt, Aussehen, Hintergrund)\r\n" +
+            "• diese Konfiguration – wie früher die Whitelist\r\n" +
+            "• ohne Konfiguration – kein Panel (wie früher die Blacklist)\r\n" +
+            "Rechner, die in keiner Gruppe stehen, bekommen diese Konfiguration."));
 
-        // Liste als Textfeld mit Import/Export daneben - z.B. fuer eine bisher von Hand gepflegte Textdatei.
-        Control Patterns(string what, Func<List<string>> get, Action<List<string>> set)
+        _groups.Columns.Add("Gruppe", LogicalToDeviceUnits(150));
+        _groups.Columns.Add("Rechner / IP-Bereiche", LogicalToDeviceUnits(330));
+        _groups.Columns.Add("Wirkung", LogicalToDeviceUnits(360));
+        _groups.Size = new Size(LogicalToDeviceUnits(860), LogicalToDeviceUnits(210));
+        _groups.DoubleClick += (_, _) => EditGroup(false);
+        _loaders.Add(RefreshGroups);
+
+        var buttons = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
+        void GroupButton(string text, string tip, Action action)
         {
-            var box = TextField(
-                () => string.Join(Environment.NewLine, get()),
-                v => set(v.Split('\n').Select(line => line.Trim()).Where(line => line.Length > 0).ToList()));
-            box.Multiline = true;
-            box.AcceptsReturn = true;
-            box.ScrollBars = ScrollBars.Vertical;
-            box.Size = new Size(420, 130);
-            // Beim Verlassen des Felds bereinigen (nicht waehrend des Tippens - sonst spraenge der Text
-            // unter der Schreibmarke weg): Doppelte und leere Zeilen entfernen.
-            box.Leave += (_, _) =>
-            {
-                var typed = box.Lines.Select(line => line.Trim()).Where(line => line.Length > 0).ToList();
-                var cleaned = HostsConfig.Normalize(typed);
-                if (cleaned.Count != typed.Count)
-                {
-                    set(cleaned);
-                    ReloadControls();
-                    Changed();
-                    _status.Text = $"{what}: {typed.Count - cleaned.Count} doppelte Einträge entfernt, jetzt {cleaned.Count}.";
-                }
-            };
-
-            var import = new Button { Text = "Importieren…", AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(6, 3, 6, 3) };
-            _tips.SetToolTip(import, "Liste aus einer Textdatei lesen: ein Eintrag je Zeile (auch durch Komma oder Semikolon getrennt).\r\nLeerzeilen und Zeilen, die mit # oder // beginnen, werden übergangen.");
-            import.Click += (_, _) =>
-            {
-                using var dialog = new OpenFileDialog { Title = $"{what} importieren", Filter = "Textdateien (*.txt;*.csv;*.lst)|*.txt;*.csv;*.lst|Alle Dateien|*.*" };
-                if (dialog.ShowDialog(this) != DialogResult.OK)
-                {
-                    return;
-                }
-                try
-                {
-                    var imported = HostsConfig.ParseList(File.ReadAllText(dialog.FileName));
-                    var current = HostsConfig.Normalize(get());
-                    var result = imported;
-                    if (current.Count > 0)
-                    {
-                        var answer = MessageBox.Show(this,
-                            $"Die Datei enthält {imported.Count} Einträge, die Liste hat bereits {current.Count}.\r\n\r\n" +
-                            "Ja\t\t= anhängen (ohne Doppelte)\r\nNein\t\t= vorhandene Einträge ersetzen\r\nAbbrechen\t= nichts ändern",
-                            AppTitle, MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
-                        if (answer == DialogResult.Cancel)
-                        {
-                            return;
-                        }
-                        if (answer == DialogResult.Yes)
-                        {
-                            result = current.Concat(imported.Where(entry => !current.Contains(entry, StringComparer.OrdinalIgnoreCase))).ToList();
-                        }
-                    }
-                    var appended = !ReferenceEquals(result, imported);
-                    var added = result.Count - (appended ? current.Count : 0);
-                    var skipped = imported.Count - added;
-                    set(result);
-                    ReloadControls();
-                    Changed();
-                    _status.Text = $"{what}: {added} Einträge aus {Path.GetFileName(dialog.FileName)} übernommen"
-                        + (appended && skipped > 0 ? $", {skipped} schon vorhandene übergangen" : "") + $", jetzt {result.Count}.";
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show(this, $"Import fehlgeschlagen: {ex.Message}", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Error);
-                }
-            };
-
-            var export = new Button { Text = "Exportieren…", AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(6, 3, 6, 3) };
-            _tips.SetToolTip(export, "Liste als Textdatei speichern, ein Eintrag je Zeile.");
-            export.Click += (_, _) =>
-            {
-                using var dialog = new SaveFileDialog { Title = $"{what} exportieren", Filter = "Textdatei (*.txt)|*.txt|Alle Dateien|*.*", FileName = what.StartsWith("Black") ? "disallowed_hosts.txt" : "allowed_hosts.txt" };
-                if (dialog.ShowDialog(this) != DialogResult.OK)
-                {
-                    return;
-                }
-                try
-                {
-                    var entries = HostsConfig.Normalize(get());
-                    File.WriteAllLines(dialog.FileName, entries);
-                    _status.Text = $"{what}: {entries.Count} Einträge nach {dialog.FileName} geschrieben.";
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show(this, $"Export fehlgeschlagen: {ex.Message}", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Error);
-                }
-            };
-
-            var buttons = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, Margin = new Padding(6, 0, 0, 0) };
-            buttons.Controls.Add(import);
-            buttons.Controls.Add(export);
-            var row = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
-            row.Controls.Add(box);
-            row.Controls.Add(buttons);
-            return row;
+            var button = new Button { Text = text, AutoSize = true, Margin = new Padding(0, 0, 6, 0) };
+            button.Click += (_, _) => action();
+            _tips.SetToolTip(button, tip);
+            buttons.Controls.Add(button);
         }
+        GroupButton("Gruppe hinzufügen…", "Eine neue Gruppe von Rechnern anlegen", () => EditGroup(true));
+        GroupButton("Ändern…", "Die markierte Gruppe ändern (auch per Doppelklick)", () => EditGroup(false));
+        GroupButton("Entfernen", "Die markierte Gruppe entfernen (Dateien werden nicht gelöscht)", RemoveGroup);
+        GroupButton("▲", "Nach oben – wird früher geprüft", () => MoveGroup(-1));
+        GroupButton("▼", "Nach unten – wird später geprüft", () => MoveGroup(1));
+        GroupButton("Konfiguration der Gruppe öffnen", "Die Konfigurationsdatei der markierten Gruppe im Editor öffnen; gibt es sie noch nicht, als Kopie dieser Konfiguration anlegen", OpenGroupConfig);
+        Row(table, "", _groups);
+        Row(table, "", buttons);
+        Row(table, "", Hint("Einträge einer Gruppe: Rechnername mit Platzhaltern – * = beliebig viele Zeichen, ? = genau ein Zeichen, an jeder Stelle und auch mehrfach:\r\n" +
+            "SRV-*, PC-0??, *-ts-*, mh-??-xama, *xama*, *.dmz.firma.local\r\n" +
+            "Groß- und Kleinschreibung spielt keine Rolle: *-TS-* passt auch auf mh-ts-01.\r\n" +
+            "IP-Adresse (10.10.1.5), Netz (10.10.0.0/16) oder Bereich (10.10.1.10-10.10.1.50, kurz 10.10.1.10-50).\r\n" +
+            "Namen werden gegen Rechnername und voll qualifizierten Namen geprüft, IP-Angaben gegen alle IPv4-Adressen der aktiven Netzwerkadapter."));
 
-        // Zusaetzlich zur Liste in der Konfiguration: eine zentral gepflegte Textdatei, die jeder Lauf frisch liest.
-        Control ListFile(string what, Func<string?> get, Action<string?> set)
-        {
-            var path = TextField(() => get() ?? "", v => set(string.IsNullOrWhiteSpace(v) ? null : v.Trim()));
-            path.Width = 420;
-            path.PlaceholderText = @"z. B. \\fileserver.example.com\share\bginfo\hosts.txt   (leer = keine Datei)";
-            _tips.SetToolTip(path, $"{what}-Einträge aus einer Textdatei, zusätzlich zur Liste oben.\r\nEin Eintrag je Zeile – dieselbe Form wie beim Import. Pfad, UNC-Share oder http(s)-URL;\r\nein relativer Pfad gilt relativ zur Konfigurationsdatei.\r\nDie Datei wird bei jedem Lauf gelesen; ist sie nicht erreichbar, gilt die zuletzt gelesene Fassung.");
-            var browse = new Button { Text = "…", AutoSize = true };
-            browse.Click += (_, _) =>
-            {
-                using var dialog = new OpenFileDialog { Title = $"{what}-Datei wählen", Filter = "Textdateien (*.txt;*.csv;*.lst)|*.txt;*.csv;*.lst|Alle Dateien|*.*" };
-                if (dialog.ShowDialog(this) == DialogResult.OK)
-                {
-                    var sameFolder = _path != null && string.Equals(Path.GetDirectoryName(dialog.FileName), Path.GetDirectoryName(_path), StringComparison.OrdinalIgnoreCase);
-                    path.Text = sameFolder ? @".\" + Path.GetFileName(dialog.FileName) : dialog.FileName;
-                }
-            };
-            var row = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
-            row.Controls.Add(path);
-            row.Controls.Add(browse);
-            return row;
-        }
-
-        Row(table, "Whitelist – nur auf diesen Rechnern\r\n(leer = auf allen)", Patterns("Whitelist", () => _config.Hosts.Include, v => _config.Hosts.Include = v));
-        Row(table, "… zusätzlich aus Datei", ListFile("Whitelist", () => _config.Hosts.IncludeFile, v => _config.Hosts.IncludeFile = v));
-        Row(table, "Blacklist – nicht auf diesen Rechnern\r\n(hat Vorrang)", Patterns("Blacklist", () => _config.Hosts.Exclude, v => _config.Hosts.Exclude = v));
-        Row(table, "… zusätzlich aus Datei", ListFile("Blacklist", () => _config.Hosts.ExcludeFile, v => _config.Hosts.ExcludeFile = v));
-        Row(table, "", Hint("Die Listen oben stehen in der Konfigurationsdatei. Eine Datei daneben wird bei jedem Lauf frisch gelesen –\r\nÄnderungen an ihr wirken ohne neues Verteilen der Konfiguration. Beides zusammen ist möglich; es gilt die Summe.\r\nWie viele Einträge aus den Dateien kamen, steht nach dem Rendern der Vorschau in der Statuszeile."));
-        Row(table, "Auf ausgeschlossenen Rechnern", Combo(new[]
+        Row(table, "Auf Rechnern ohne Panel", Combo(new[]
         {
             (ExcludedAction.BackgroundOnly, "Hintergrund ohne Panel setzen"),
             (ExcludedAction.Skip, "Nichts tun – Wallpaper bleibt unverändert")
         }, () => _config.Hosts.OnExcluded, v => _config.Hosts.OnExcluded = v));
-        Row(table, "", Hint($"Dieser Rechner heißt {Environment.MachineName}. Ob er ausgeschlossen wäre, steht unten in der Statuszeile."));
+        Row(table, "", _groupOfThisMachine);
 
         return ScrollPage("Rechner", table);
+    }
+
+    private static string DescribeGroupEffect(HostGroup group) =>
+        group.UsesOwnConfig ? $"eigene Konfiguration: {group.Config}"
+        : group.Excludes ? "kein Panel"
+        : "diese Konfiguration";
+
+    /// <summary>Fuellt die Gruppenliste und sagt, in welche Gruppe dieser Rechner faellt (ohne die Listendateien zu lesen).</summary>
+    private void RefreshGroups()
+    {
+        var selected = _groups.SelectedIndices.Count > 0 ? _groups.SelectedIndices[0] : -1;
+        _groups.BeginUpdate();
+        _groups.Items.Clear();
+        foreach (var group in _config.Hosts.Groups)
+        {
+            var entries = group.Match.Count == 0 ? "" : string.Join(", ", group.Match.Take(6)) + (group.Match.Count > 6 ? $" … ({group.Match.Count} Einträge)" : "");
+            if (!string.IsNullOrWhiteSpace(group.MatchFile))
+            {
+                entries += (entries.Length > 0 ? "  +  " : "") + $"Liste aus {group.MatchFile}";
+            }
+            var item = new ListViewItem(new[] { group.Name, entries.Length > 0 ? entries : "(keine Einträge – passt auf keinen Rechner)", DescribeGroupEffect(group) })
+            {
+                ToolTipText = string.Join(Environment.NewLine, group.Match.Take(40)) + (group.Match.Count > 40 ? Environment.NewLine + "…" : "")
+            };
+            if (group.Excludes)
+            {
+                item.ForeColor = Color.Firebrick;
+            }
+            _groups.Items.Add(item);
+        }
+        _groups.EndUpdate();
+        if (selected >= 0 && selected < _groups.Items.Count)
+        {
+            _groups.Items[selected].Selected = true;
+        }
+
+        var hostNames = new[] { Environment.MachineName, new ValueResolver().Expand("{fqdn}") };
+        var mine = _config.Hosts.FindGroup(hostNames, out var matchedBy);
+        _groupOfThisMachine.Text = $"Dieser Rechner heißt {Environment.MachineName}. " + (mine == null
+            ? "Er steht in keiner Gruppe und bekommt diese Konfiguration."
+            : $"Er fällt in die Gruppe „{mine.Name}“ (passt auf \"{matchedBy}\"): {DescribeGroupEffect(mine)}.")
+            + (_config.Hosts.Groups.Any(g => !string.IsNullOrWhiteSpace(g.MatchFile)) ? "\r\nEinträge aus Listendateien sind hier nicht berücksichtigt – die orange Zeile unten im Fenster prüft sie mit." : "");
+    }
+
+    private HostGroup? SelectedGroup =>
+        _groups.SelectedIndices.Count > 0 && _groups.SelectedIndices[0] < _config.Hosts.Groups.Count ? _config.Hosts.Groups[_groups.SelectedIndices[0]] : null;
+
+    private void RemoveGroup()
+    {
+        if (SelectedGroup is not { } group)
+        {
+            _status.Text = "Zum Entfernen zuerst eine Gruppe markieren.";
+            return;
+        }
+        _config.Hosts.Groups.Remove(group);
+        RefreshGroups();
+        Changed();
+    }
+
+    private void MoveGroup(int direction)
+    {
+        var index = _groups.SelectedIndices.Count > 0 ? _groups.SelectedIndices[0] : -1;
+        var target = index + direction;
+        var groups = _config.Hosts.Groups;
+        if (index < 0 || target < 0 || target >= groups.Count)
+        {
+            return;
+        }
+        (groups[index], groups[target]) = (groups[target], groups[index]);
+        RefreshGroups();
+        _groups.Items[target].Selected = true;
+        Changed();
+    }
+
+    /// <summary>Oeffnet die Konfigurationsdatei der markierten Gruppe; fehlt sie, wird sie auf Wunsch als Kopie dieser Konfiguration angelegt.</summary>
+    private void OpenGroupConfig()
+    {
+        if (SelectedGroup is not { UsesOwnConfig: true } group)
+        {
+            _status.Text = "Die markierte Gruppe hat keine eigene Konfigurationsdatei.";
+            return;
+        }
+        var source = Environment.ExpandEnvironmentVariables(group.Config!.Trim());
+        if (AppConfig.IsUrl(source))
+        {
+            MessageBox.Show(this, $"Die Konfiguration dieser Gruppe ist eine URL und lässt sich hier nicht öffnen:\r\n{source}", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        var file = Path.IsPathRooted(source) ? source : Path.GetFullPath(Path.Combine(ConfigDirectory, source));
+        if (!ConfirmDiscard())
+        {
+            return;
+        }
+        try
+        {
+            if (!File.Exists(file))
+            {
+                var answer = MessageBox.Show(this,
+                    $"Die Datei gibt es noch nicht:\r\n{file}\r\n\r\nAls Kopie dieser Konfiguration anlegen (ohne die Gruppen)?",
+                    AppTitle, MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                if (answer != DialogResult.Yes)
+                {
+                    return;
+                }
+                var copy = AppConfig.FromJson(_config.ToJson(), file);
+                copy.Hosts = new HostsConfig { OnExcluded = _config.Hosts.OnExcluded };
+                copy.Description = $"Konfiguration der Gruppe {group.Name}";
+                Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+                File.WriteAllText(file, copy.ToJson());
+            }
+            OpenFile(file);
+            _status.Text = $"Konfiguration der Gruppe „{group.Name}“ geöffnet: {file}";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(this, $"Die Datei konnte nicht geöffnet bzw. angelegt werden:\r\n{ex.Message}", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    /// <summary>Dialog fuer eine Gruppe: Name, Wirkung, Konfigurationsdatei, Eintraege (mit Import/Export) und Listendatei.</summary>
+    private void EditGroup(bool add)
+    {
+        var existing = add ? null : SelectedGroup;
+        if (!add && existing == null)
+        {
+            _status.Text = "Zum Ändern zuerst eine Gruppe markieren.";
+            return;
+        }
+
+        using var dialog = new Form
+        {
+            Text = existing == null ? "Gruppe hinzufügen" : "Gruppe ändern",
+            FormBorderStyle = FormBorderStyle.FixedDialog, MinimizeBox = false, MaximizeBox = false, ShowInTaskbar = false,
+            StartPosition = FormStartPosition.CenterParent, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(12), Font = Font
+        };
+        var name = new TextBox { Width = LogicalToDeviceUnits(260), Text = existing?.Name ?? "" };
+        var effect = new ComboBox { Width = LogicalToDeviceUnits(420), DropDownStyle = ComboBoxStyle.DropDownList };
+        effect.Items.AddRange(new object[]
+        {
+            "Eigene Konfigurationsdatei für diese Rechner",
+            "Diese Konfiguration (wie früher die Whitelist)",
+            "Kein Panel (wie früher die Blacklist)"
+        });
+        effect.SelectedIndex = existing == null ? 0 : existing.UsesOwnConfig ? 0 : existing.Excludes ? 2 : 1;
+        var config = new TextBox { Width = LogicalToDeviceUnits(420), Text = existing?.Config ?? "", PlaceholderText = @"z. B. .\BGInfo-Server.json oder \\fileserver.example.com\share\bginfo\server.json" };
+        var browseConfig = new Button { Text = "…", AutoSize = true };
+        browseConfig.Click += (_, _) =>
+        {
+            using var open = new OpenFileDialog { Filter = "BgInfo-Konfiguration (*.json)|*.json|Alle Dateien|*.*", CheckFileExists = false, Title = "Konfigurationsdatei der Gruppe (darf noch fehlen)" };
+            if (open.ShowDialog(dialog) == DialogResult.OK)
+            {
+                config.Text = ShortenPath(open.FileName, ConfigDirectory);
+            }
+        };
+        void SyncConfigField() => config.Enabled = browseConfig.Enabled = effect.SelectedIndex == 0;
+        effect.SelectedIndexChanged += (_, _) => SyncConfigField();
+        SyncConfigField();
+
+        var entries = new TextBox
+        {
+            Multiline = true, AcceptsReturn = true, ScrollBars = ScrollBars.Vertical,
+            Size = new Size(LogicalToDeviceUnits(420), LogicalToDeviceUnits(170)),
+            Text = string.Join(Environment.NewLine, existing?.Match ?? new List<string>())
+        };
+        List<string> TypedEntries() => HostsConfig.Normalize(entries.Lines);
+        var import = new Button { Text = "Importieren…", AutoSize = true };
+        import.Click += (_, _) =>
+        {
+            using var open = new OpenFileDialog { Title = "Einträge importieren", Filter = "Textdateien (*.txt;*.csv;*.lst)|*.txt;*.csv;*.lst|Alle Dateien|*.*" };
+            if (open.ShowDialog(dialog) != DialogResult.OK)
+            {
+                return;
+            }
+            try
+            {
+                var imported = HostsConfig.ParseList(File.ReadAllText(open.FileName));
+                var current = TypedEntries();
+                var result = imported;
+                if (current.Count > 0)
+                {
+                    var answer = MessageBox.Show(dialog,
+                        $"Die Datei enthält {imported.Count} Einträge, die Gruppe hat bereits {current.Count}.\r\n\r\n" +
+                        "Ja\t\t= anhängen (ohne Doppelte)\r\nNein\t\t= vorhandene Einträge ersetzen\r\nAbbrechen\t= nichts ändern",
+                        AppTitle, MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+                    if (answer == DialogResult.Cancel)
+                    {
+                        return;
+                    }
+                    if (answer == DialogResult.Yes)
+                    {
+                        result = HostsConfig.Normalize(current.Concat(imported));
+                    }
+                }
+                entries.Text = string.Join(Environment.NewLine, result);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(dialog, $"Import fehlgeschlagen: {ex.Message}", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        };
+        var export = new Button { Text = "Exportieren…", AutoSize = true };
+        export.Click += (_, _) =>
+        {
+            using var save = new SaveFileDialog { Title = "Einträge exportieren", Filter = "Textdatei (*.txt)|*.txt|Alle Dateien|*.*", FileName = "hosts.txt" };
+            if (save.ShowDialog(dialog) != DialogResult.OK)
+            {
+                return;
+            }
+            try
+            {
+                File.WriteAllLines(save.FileName, TypedEntries());
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(dialog, $"Export fehlgeschlagen: {ex.Message}", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        };
+        var entryButtons = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, Margin = Padding.Empty };
+        entryButtons.Controls.Add(import);
+        entryButtons.Controls.Add(export);
+
+        var listFile = new TextBox { Width = LogicalToDeviceUnits(420), Text = existing?.MatchFile ?? "", PlaceholderText = @"z. B. \\fileserver.example.com\share\bginfo\hosts.txt   (leer = keine Datei)" };
+        var browseList = new Button { Text = "…", AutoSize = true };
+        browseList.Click += (_, _) =>
+        {
+            using var open = new OpenFileDialog { Title = "Listendatei wählen", Filter = "Textdateien (*.txt;*.csv;*.lst)|*.txt;*.csv;*.lst|Alle Dateien|*.*" };
+            if (open.ShowDialog(dialog) == DialogResult.OK)
+            {
+                listFile.Text = ShortenPath(open.FileName, ConfigDirectory);
+            }
+        };
+
+        var accept = new Button { Text = "OK", DialogResult = DialogResult.OK, AutoSize = true };
+        var cancel = new Button { Text = "Abbrechen", DialogResult = DialogResult.Cancel, AutoSize = true };
+        var layout = new TableLayoutPanel { AutoSize = true, ColumnCount = 3, Dock = DockStyle.Fill };
+        void Line(string caption, Control control, Control? extra = null)
+        {
+            layout.Controls.Add(new Label { Text = caption, AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(3, 7, 12, 7) });
+            layout.Controls.Add(control);
+            layout.Controls.Add(extra ?? new Label());
+        }
+        Line("Name der Gruppe", name);
+        Line("Wirkung", effect);
+        Line("Konfigurationsdatei", config, browseConfig);
+        Line("Rechner / IP-Bereiche\r\n(ein Eintrag je Zeile)", entries, entryButtons);
+        Line("… zusätzlich aus Datei", listFile, browseList);
+        var hint = new Label
+        {
+            AutoSize = true, ForeColor = SystemColors.GrayText, Margin = new Padding(3, 4, 3, 4),
+            Text = "Platzhalter an jeder Stelle: * = beliebig viele Zeichen, ? = genau ein Zeichen – z. B. *-ts-*, mh-??-xama, *xama*.\r\n" +
+                "Groß- und Kleinschreibung spielt keine Rolle.\r\n" +
+                "Die Listendatei wird bei jedem Lauf frisch gelesen (Pfad, UNC oder URL; relativ zur Konfigurationsdatei).\r\n" +
+                "Ein * als einziger Eintrag passt auf alle Rechner – als letzte Gruppe für „alle anderen“."
+        };
+        layout.Controls.Add(hint);
+        layout.SetColumnSpan(hint, 3);
+        var footer = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.RightToLeft, Dock = DockStyle.Fill, Margin = new Padding(0, 12, 0, 0) };
+        footer.Controls.Add(cancel);
+        footer.Controls.Add(accept);
+        layout.Controls.Add(footer);
+        layout.SetColumnSpan(footer, 3);
+        dialog.Controls.Add(layout);
+        dialog.CancelButton = cancel; // kein AcceptButton: Enter gehoert dem mehrzeiligen Feld
+
+        while (dialog.ShowDialog(this) == DialogResult.OK)
+        {
+            if (string.IsNullOrWhiteSpace(name.Text))
+            {
+                MessageBox.Show(dialog, "Bitte einen Namen für die Gruppe angeben.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                continue;
+            }
+            if (effect.SelectedIndex == 0 && string.IsNullOrWhiteSpace(config.Text))
+            {
+                MessageBox.Show(dialog, "Für „Eigene Konfigurationsdatei“ bitte eine Datei angeben – oder eine andere Wirkung wählen.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                continue;
+            }
+
+            var group = existing ?? new HostGroup();
+            group.Name = name.Text.Trim();
+            group.Match = TypedEntries();
+            group.MatchFile = string.IsNullOrWhiteSpace(listFile.Text) ? null : listFile.Text.Trim();
+            switch (effect.SelectedIndex)
+            {
+                case 0:
+                    group.Mode = HostGroupMode.Auto;
+                    group.Config = config.Text.Trim();
+                    break;
+                case 1:
+                    group.Mode = HostGroupMode.ThisConfig;
+                    group.Config = null;
+                    break;
+                default:
+                    group.Mode = HostGroupMode.Auto;
+                    group.Config = null;
+                    break;
+            }
+            if (existing == null)
+            {
+                // Vor "Alle anderen" (ein einzelnes *) einfuegen - dahinter wuerde die Gruppe nie erreicht.
+                var groups = _config.Hosts.Groups;
+                var catchAll = groups.FindIndex(g => g.Match.Count == 1 && g.Match[0] == "*" && string.IsNullOrWhiteSpace(g.MatchFile));
+                groups.Insert(catchAll >= 0 ? catchAll : groups.Count, group);
+            }
+            RefreshGroups();
+            Changed();
+            return;
+        }
     }
 
     private TabPage BuildFieldsTab()
@@ -1856,11 +2082,15 @@ public sealed class MainForm : Form
                 // Zuerst das Standardbild selbst - mit der Aufloesung, die es wirklich hat.
                 var configured = config.ResolveWallpaperPath();
                 var baseImage = ResolveBaseImage(config);
-                if (baseImage != null && File.Exists(baseImage))
+                // Standardbild ist die Datei ohne Aufloesung im Namen; fehlt sie, die Fassung mit 1920x1080 im Namen.
+                var standard = baseImage == null ? null : WallpaperState.FindDefaultImage(baseImage);
+                if (standard != null)
                 {
-                    var size = WallpaperRenderer.TryGetImageSize(baseImage);
-                    result.Add((size is { } s ? $"{s.Width}x{s.Height}" : "?", baseImage,
-                        configured != null ? "Standardbild" : "Standardbild – Wallpaper des Benutzers", "", "base"));
+                    var size = WallpaperRenderer.TryGetImageSize(standard);
+                    var origin = configured == null ? "Standardbild – Wallpaper des Benutzers"
+                        : string.Equals(standard, baseImage, StringComparison.OrdinalIgnoreCase) ? "Standardbild (ohne Auflösung im Namen)"
+                        : $"Standardbild (1920 × 1080 im Namen, kein {Path.GetFileName(configured)})";
+                    result.Add((size is { } s ? $"{s.Width}x{s.Height}" : "?", standard, origin, "", "base"));
                 }
                 else if (configured != null)
                 {
@@ -1876,6 +2106,10 @@ public sealed class MainForm : Form
                 {
                     foreach (var (file, width, height) in WallpaperState.ListResolutionVariants(configured))
                     {
+                        if (string.Equals(file, standard, StringComparison.OrdinalIgnoreCase))
+                        {
+                            continue; // steht schon oben als Standardbild
+                        }
                         var key = $"{width}x{height}";
                         var covered = overrides.Any(o => o.Resolution == key && File.Exists(o.Path));
                         result.Add((key, file, covered ? "im Ordner gefunden (überdeckt)" : "im Ordner gefunden", "", "found"));
@@ -1902,7 +2136,7 @@ public sealed class MainForm : Form
                     {
                         WallpaperChoice.Override => "eigene Zuordnung",
                         WallpaperChoice.ExactVariant => "passt genau",
-                        WallpaperChoice.Base => $"für {shownKey} gibt es kein eigenes Bild – Standardbild",
+                        WallpaperChoice.Base or WallpaperChoice.DefaultVariant => $"für {shownKey} gibt es kein eigenes Bild – Standardbild",
                         WallpaperChoice.BestFit => $"für {shownKey} gibt es kein eigenes Bild – dieses passt am besten",
                         _ => "kein Hintergrundbild – einfarbiger Hintergrund"
                     };
@@ -2287,7 +2521,7 @@ public sealed class MainForm : Form
         }
 
         var create = new TaskDialogCommandLinkButton("Standard-Konfiguration erstellen",
-            $"Legt {target} an – mit allen Einstellungen in ihren Standardwerten und leerer White- und Blacklist. " +
+            $"Legt {target} an – mit allen Einstellungen in ihren Standardwerten und ohne Rechnergruppen. " +
             $"Das gesetzte Wallpaper wird nach {WallpaperState.AdoptedFolder}\\ daneben kopiert und als Hintergrundbild eingetragen.");
         var load = new TaskDialogCommandLinkButton("Vorhandene Konfiguration laden…", "Eine bestehende BGInfo-Reloaded.json auswählen und öffnen.");
         var none = new TaskDialogCommandLinkButton("Ohne Datei beginnen", "Mit den Standardwerten arbeiten und erst beim Speichern einen Ort wählen.");
@@ -2520,10 +2754,13 @@ public sealed class MainForm : Form
 
         // Rechnerlisten bereinigt speichern - auch wenn Doppelte schon in der geladenen Datei standen
         // oder das Feld beim Klick auf "Speichern" noch den Fokus hatte.
-        var listEntries = _config.Hosts.Include.Count + _config.Hosts.Exclude.Count;
-        _config.Hosts.Include = HostsConfig.Normalize(_config.Hosts.Include);
-        _config.Hosts.Exclude = HostsConfig.Normalize(_config.Hosts.Exclude);
-        var removedDuplicates = listEntries - _config.Hosts.Include.Count - _config.Hosts.Exclude.Count;
+        _config.Hosts.MigrateLegacyLists();
+        var listEntries = _config.Hosts.Groups.Sum(group => group.Match.Count);
+        foreach (var group in _config.Hosts.Groups)
+        {
+            group.Match = HostsConfig.Normalize(group.Match);
+        }
+        var removedDuplicates = listEntries - _config.Hosts.Groups.Sum(group => group.Match.Count);
         if (removedDuplicates > 0)
         {
             ReloadControls();
@@ -2708,6 +2945,11 @@ public sealed class MainForm : Form
     private static string DescribeHostExclusion(AppConfig config)
     {
         var hostNames = new[] { Environment.MachineName, new ValueResolver().Expand("{fqdn}") };
+        var group = config.Hosts.FindGroup(hostNames, out var matchedBy);
+        if (group is { UsesOwnConfig: true })
+        {
+            return $"Achtung: {Environment.MachineName} fällt in die Gruppe „{group.Name}“ (passt auf \"{matchedBy}\") – BGInfo-Reloaded.exe verwendet hier {group.Config}. Die Vorschau zeigt die geöffnete Datei.";
+        }
         return config.Hosts.Allows(hostNames, out var reason) ? ""
             : $"Achtung: {Environment.MachineName} {reason} – " + (config.Hosts.OnExcluded == ExcludedAction.Skip
                 ? "BGInfo-Reloaded.exe ändert hier nichts. Die Vorschau zeigt das Panel trotzdem."

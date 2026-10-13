@@ -218,6 +218,24 @@ public static class WallpaperState
     public static List<(string Path, int Width, int Height)> ListResolutionVariants(string imagePath) =>
         FindResolutionVariants(imagePath).OrderBy(v => (long)v.Width * v.Height).ThenBy(v => v.Width).ToList();
 
+    /// <summary>Die Aufloesung, deren Fassung als Standardbild gilt, wenn es kein Bild ohne Aufloesung im Namen gibt.</summary>
+    public const int DefaultWidth = 1920;
+    public const int DefaultHeight = 1080;
+
+    /// <summary>
+    /// Das Standardbild zu einem Bildnamen: die Datei ohne Aufloesung im Namen, sonst die Fassung mit
+    /// 1920x1080 im Namen. Null, wenn es keins von beiden gibt.
+    /// </summary>
+    public static string? FindDefaultImage(string imagePath)
+    {
+        if (File.Exists(imagePath))
+        {
+            return imagePath;
+        }
+        var standard = FindResolutionVariants(imagePath).FirstOrDefault(v => v.Width == DefaultWidth && v.Height == DefaultHeight);
+        return standard.Path;
+    }
+
     /// <summary>
     /// "bild_1920x1080.jpg" (auch mit "-" oder ohne Trenner) -> "bild.jpg": der Name, unter dem alle
     /// Fassungen gefunden werden. Ein Name ohne Aufloesung bleibt, wie er ist.
@@ -254,6 +272,12 @@ public static class WallpaperState
         if (File.Exists(imagePath) || variants.Count == 0)
         {
             return imagePath;
+        }
+        // Kein Bild ohne Zusatz: dann ist die Fassung in der Standardaufloesung das Standardbild.
+        var standard = variants.FirstOrDefault(v => v.Width == DefaultWidth && v.Height == DefaultHeight);
+        if (standard.Path != null)
+        {
+            return standard.Path;
         }
 
         var aspect = (double)width / height;

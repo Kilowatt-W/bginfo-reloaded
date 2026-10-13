@@ -32,8 +32,8 @@ Technical background, license notes and the comparison with PowerBGInfo are in
   variables or files.
 - **Central distribution** – configuration from a UNC share or an http(s) URL, with a local cache
   for machines without a network connection.
-- **Whitelist/blacklist** – include or exclude the panel on machines by computer name pattern
-  (`*`, `?`).
+- **Machine groups** – group machines by name pattern (`*`, `?`) or IP range; every group gets its
+  own configuration file, the main configuration or no panel at all.
 - **Autostart** – scheduled tasks at logon and at a fixed interval, without admin rights.
 - **Windowless** – no console window appears when run as a task.
 - **Log file** – every run is logged, errors can be traced.
@@ -79,7 +79,7 @@ The tabs and buttons (German labels in parentheses):
   taskbar, rounded corners, shadow, colours, opacity, font.
 - **Background (Hintergrund):** image file, fit to the resolution, image per resolution, behaviour
   with multiple monitors.
-- **Machines (Rechner):** whitelist and blacklist.
+- **Machines (Rechner):** machine groups with their own configuration or without a panel (formerly whitelist and blacklist).
 - **File and fields (Datei und Felder):** version and description of the file, central file
   (`include`), custom fields.
 - **Autostart and tools (Autostart und Werkzeuge):** set up and remove the autostart tasks
@@ -227,7 +227,7 @@ Which source was used is shown in the output and in the log (`Konfiguration: …
 The editor follows the same order: without a file argument it opens the file `BGInfo-Reloaded.exe`
 would use (it skips a URL given through the environment variable). If there is none, it asks on
 start: **create a default configuration** (writes a `BGInfo-Reloaded.json` with all settings at
-their default values and empty whitelist and blacklist into the program folder and opens it),
+their default values and without machine groups into the program folder and opens it),
 **load an existing configuration** or **start without a file**. If the program folder is not
 writable, it lets you choose where to save. The status bar shows the file name; the full path appears when the mouse points
 at it.
@@ -293,8 +293,10 @@ value – so a file that only contains `items` is valid. A complete, commented t
     "panel": "All"                               // All = panel on every monitor, Primary = only once
   },
   "hosts": {
-    "include": [],                               // whitelist of computer names, * and ? allowed
-    "exclude": ["KIOSK-*", "PC-0??"],            // blacklist, takes precedence
+    "groups": [                                  // machine groups, the first matching one decides
+      { "name": "Blacklist", "match": ["KIOSK-*", "PC-0??"] },                    // no "config": no panel
+      { "name": "Servers", "match": ["SRV-*"], "config": ".\\BGInfo-Server.json" }  // own configuration
+    ],
     "onExcluded": "BackgroundOnly"               // or "Skip"
   },
   "update": {
@@ -467,7 +469,12 @@ For resolutions without a matching image in the folder, any image can be assigne
 ```
 
 Order per monitor: the own assignment for exactly this resolution, then the file with this
-resolution in its name, then the image without suffix, then the best fitting other version. This
+resolution in its name, then the default image, then the best fitting other version.
+
+**The default image** is the file without a resolution in its name (`Wallpaper.jpg`). If it does
+not exist, the version with 1920x1080 in its name (`Wallpaper_1920x1080.jpg`) is the default –
+1920 × 1080 is the standard resolution. Only if that is missing too, the best fitting version is
+looked for. This
 applies on every run – also when `--watch` renders again after a resolution change. If the file of
 an assignment is missing, the log gets a warning and the next step applies.
 
@@ -476,7 +483,7 @@ actual resolution, the own assignments, the
 versions found in the folder and, for every connected monitor, which image it gets. Assignments can
 be added, changed and removed there. If an image is chosen that already carries a resolution in its
 name (`Wallpaper_1920x1080.jpg`), the editor enters `Wallpaper.jpg` – all versions are found under
-that name; the file itself need not exist.
+that name; the file itself need not exist. A message then says which file is now the default image.
 
 ### Multiple monitors (`monitors`)
 
@@ -500,69 +507,81 @@ the plain area in `backgroundColor`.
 If the configured font is not installed, the program automatically falls back to Consolas, Segoe UI,
 Tahoma, Arial or Verdana. Backslashes have to be doubled in JSON (`\\`).
 
-### Including or excluding machines (`hosts`)
+### Machine groups: who gets which configuration (`hosts`)
 
-With a central configuration you can control on which machines the info panel appears.
+With a central configuration you can control which machines get which configuration – and which
+get no panel at all. This is done with groups, checked from top to bottom. The first group a
+machine matches decides:
 
-| Setting | Effect |
+```jsonc
+"hosts": {
+  "groups": [
+    { "name": "Blacklist", "match": ["KIOSK-*", "10.10.99.0/24"] },                                    // no "config": no panel
+    { "name": "Servers",   "match": ["SRV-*", "10.10.20.0/24"], "config": ".\\BGInfo-Server.json" },    // own file
+    { "name": "Notebooks", "matchFile": "\\\\fileserver.example.com\\share\\bginfo\\notebooks.txt",
+                           "config": "\\\\fileserver.example.com\\share\\bginfo\\notebook.json" },
+    { "name": "Office",    "match": ["OF-*"], "mode": "ThisConfig" }                                   // this configuration
+  ],
+  "onExcluded": "BackgroundOnly"
+}
+```
+
+| Entry | Effect |
 |---|---|
-| `include` | Whitelist. If it is not empty, the panel only appears on machines that one of the entries matches. |
-| `exclude` | Blacklist. The panel does not appear on matching machines. Takes precedence over `include`. |
-| `onExcluded` | What happens on excluded machines: `BackgroundOnly` (default) sets the background as configured, just without the panel – this also removes a panel set earlier. `Skip` leaves the wallpaper completely untouched. |
+| `name` | free text, shown in the log and in the editor |
+| `match` | computer names and IP entries of the group (see below) |
+| `matchFile` | further entries from a text file (path, UNC, URL; relative to the configuration file), read anew on every run |
+| `config` | configuration file for these machines (path, UNC, URL; relative to the main file). It applies to the group completely: content, appearance, background |
+| no `config` | no panel – the former blacklist |
+| `"mode": "ThisConfig"` | the machines of the group get this (main) configuration – the former whitelist |
+| `"mode": "Exclude"` | no panel, even if a file is entered |
+| `onExcluded` | What happens on machines without a panel: `BackgroundOnly` (default) sets the background as configured, just without the panel – this also removes a panel set earlier. `Skip` leaves the wallpaper completely untouched. |
 
-An entry is either a computer name or an IP specification; both are valid in both lists:
+- Machines that are in no group get the main configuration.
+- The order decides: if a machine is in two groups, the upper one applies. A group without a
+  configuration at the very top therefore works like a blacklist with precedence.
+- A `*` as the only entry matches all machines. As the last group without `config` this means: all
+  remaining machines get no panel (this is how a whitelist used to work).
+- In the file of a group, `groups` are not evaluated – the assignment is made by the main file
+  alone, there is no nesting.
+- If the file of a group is not reachable, the version read last from the local cache applies; if
+  there is none yet, the main configuration is used and the log gets a warning.
+
+An entry in `match` or in the list file is either a computer name or an IP entry:
 
 | Entry | Example | Checked against |
 |---|---|---|
-| name, optionally with `*` (any number of characters) and `?` (exactly one character) | `SRV-*`, `PC-0??`, `*.dmz.company.local` | computer name and fully qualified name; case does not matter |
+| name, also with `*` (any number of characters) and `?` (exactly one character), anywhere and more than once | `SRV-*`, `PC-0??`, `*-ts-*`, `mh-??-xama`, `*xama*`, `*.dmz.company.local` | computer name and fully qualified name; upper and lower case do not matter (`*-TS-*` also matches `mh-ts-01`) |
 | single IP address | `10.10.1.5` | all IPv4 addresses of the active network adapters |
 | network | `10.10.0.0/16` | the same |
 | range | `10.10.1.10-10.10.1.50`, short `10.10.1.10-50` | the same |
 
-If a machine has several addresses, one match is enough. IPv4 is supported. A name pattern is
-additionally checked against the addresses as text, so `10.10.*` works as well.
+If a machine has several addresses, one match is enough. IPv4 is supported. A name pattern is also
+checked against the addresses as text, so `10.10.*` works as well.
 
-```jsonc
-"hosts": { "exclude": ["KIOSK-*", "PC-0??"] }                    // everywhere except on these
-"hosts": { "include": ["SRV-*"], "exclude": ["SRV-TEST*"] }       // servers only, but no test servers
-"hosts": { "include": ["10.10.0.0/16"], "exclude": ["10.10.99.1-10.10.99.254"] }   // by network
-```
+**In the editor (tab “Rechner”):** a table shows the groups with their entries and effect. Groups
+can be added, changed, removed and moved in their order; “Konfiguration der Gruppe öffnen” opens
+the group's file and, if it does not exist yet, creates it as a copy of the open configuration. The
+dialog of a group offers “Importieren…” and “Exportieren…” for the entries: a text file with one
+entry per line (also separated by comma or semicolon); empty lines and lines starting with `#` or
+`//` are skipped, duplicates removed. Below the table the editor says which group its own machine
+falls into.
 
-**Import and export:** in the editor each list has the buttons “Importieren…” (import) and
-“Exportieren…” (export). The import reads a text file with one entry per line (also separated by
-comma or semicolon); empty lines and lines starting with `#` or `//` are skipped, duplicates
-removed. If the list already has entries, the editor asks whether to append or replace. The export
-writes the same form. Afterwards the entries are stored in `BGInfo-Reloaded.json` – a text file
-changed later has to be imported again. Duplicate entries (also with different upper/lower case)
-are removed on import, when leaving the input field and on saving.
+**List file (`matchFile`):** the same form as for the import. The sum of `match` and file applies.
+If the file is not reachable, the version read last from a local cache applies
+(`%LOCALAPPDATA%\BGInfo-Reloaded\hosts.….cache.txt`); if there is none yet, its entries are missing
+and the log gets a warning. A file of its own pays off if the list changes often or is maintained by
+other people than the configuration.
 
-**List in a separate file:** instead of (or in addition to) the lists in the configuration, a text
-file can be given per list; it is read afresh on every run:
+**Former format:** up to version 2.14 there were separate lists `include`/`exclude` (with
+`includeFile`/`excludeFile`). Such files are still read: the blacklist becomes the group
+“Blacklist” at the very top, the whitelist the group “Whitelist” with `"mode": "ThisConfig"`,
+followed by “Alle anderen” (all others) without a panel. After saving in the editor the file
+contains groups only.
 
-```jsonc
-"hosts": {
-  "exclude": ["KIOSK-*"],                                             // directly in the configuration
-  "excludeFile": "\\\\fileserver.example.com\\share\\bginfo\\disallowed_hosts.txt",   // additionally from a file
-  "includeFile": ".\\allowed_hosts.txt"                               // relative to the configuration file
-}
-```
-
-- The file has the same form as for the import: one entry per line, names or IP specifications,
-  comment lines starting with `#` or `//`.
-- The list and the file are combined. A path, a UNC share or an http(s) URL are possible.
-- If the file is unreachable, the version read last from a local cache is used
-  (`%LOCALAPPDATA%\BGInfo-Reloaded\hosts.….cache.txt`); if there is none yet, its entries are
-  missing and the log contains a warning.
-- On every run the log states which file was read with how many entries.
-
-Which way fits when: a separate file pays off if the list changes often or is maintained by other
-people than the configuration – a change then takes effect on all machines on the next run without
-redistributing `BGInfo-Reloaded.json`. A few rarely changed entries are better kept in the
-configuration itself; they also work without a network.
-
-Whether and why a machine is excluded is shown in the output and in the log
-(`Info-Panel auf diesem Rechner abgeschaltet: …`). With `Skip` a panel set earlier stays until the
-wallpaper is changed in some other way.
+Whether and why a machine gets no panel, or which group file applies, is shown in the output and in
+the log (`Info-Panel auf diesem Rechner abgeschaltet: …`, `Gruppe „…“ (passt auf …): verwende …`).
+With `Skip` a panel set earlier stays until the wallpaper is changed otherwise.
 
 ### Lines (`items`)
 
@@ -737,7 +756,7 @@ apply as on every line (`onlyOn`, `notOn`, `when`); blocks may be nested, and li
 can additionally carry their own filters.
 
 This way a single central file can contain lines that only appear on servers, only at one site or
-only on certain machines. `hosts.include`/`hosts.exclude`, in contrast, switch off the whole panel.
+only on certain machines. The groups under `hosts`, in contrast, switch off the whole panel or assign a completely different configuration file.
 
 ### Testing the configuration
 

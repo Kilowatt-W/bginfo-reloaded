@@ -240,5 +240,10 @@ WMI-Dialog, Anzeige von Blöcken und Filtern. Noch von Hand durchzuklicken:
       tatsächlichen Auflösung an und vermerkt je Monitor das verwendete Bild; ein Bild für 1920 × 1080 steht fest direkt darunter
 - [x] 2026-10-13 Version 2.14.2: der Hinweis „Rechner ausgeschlossen“ steht in einer eigenen orangen Zeile
       links unten über der Fußzeile (vorher rechts neben der Vorschau-Überschrift, dort verdrängt)
+- [x] 2026-10-13 Version 2.15.0: Rechnergruppen (`hosts.groups`) – je Gruppe eigene Konfigurationsdatei, diese
+      Konfiguration oder kein Panel; ersetzt White- und Blacklist (altes Format wird gelesen und umgewandelt);
+      Editor: Gruppentabelle im Reiter „Rechner“ (exe: neun Fälle geprüft, Editor: Tabelle per Bildschirmfoto)
+- [x] 2026-10-13 Version 2.15.0: fehlt das Bild ohne Auflösung im Namen, gilt die Fassung mit 1920x1080 im Namen
+      als Standardbild; der Editor sagt bei der Auswahl, welche Datei als Standard gilt
 - [x] 2026-10-01 Rendering von SixLabors ImageSharp auf `System.Drawing.Common` (GDI+, MIT)
       umgestellt – Entscheidung Rendering-Bibliothek damit erledigt, kein Lizenzthema mehr
