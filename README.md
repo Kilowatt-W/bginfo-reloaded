@@ -13,7 +13,7 @@ einer einzigen, fensterlosen `BGInfo-Reloaded.exe` (self-contained, auf dem Ziel
 vorinstalliert sein, kein PowerShell zur Laufzeit). Inhalt und Aussehen des Panels kommen aus einer
 zentral verteilbaren `BGInfo-Reloaded.json`, die sich mit dem mitgelieferten Editor bearbeiten lässt.
 
-Stand: Version 2.14.0 (2026-10-13). Bis Version 1.4.0 hieß das Projekt „BgInfoNative“.
+Stand: Version 2.14.1 (2026-10-13). Bis Version 1.4.0 hieß das Projekt „BgInfoNative“.
 
 - **Bedienung, alle Aufrufe, Konfiguration und Fehlersuche:** [HOWTO.md](HOWTO.md)
   ([English](HOWTO.en.md))

@@ -460,7 +460,8 @@ Auflösung im Namen, dann das Bild ohne Zusatz, dann die am besten passende ande
 bei jedem Lauf – auch wenn `--watch` nach einem Wechsel der Auflösung neu rendert. Fehlt die Datei
 einer Zuordnung, gibt es eine Warnung im Log und es geht mit dem nächsten Schritt weiter.
 
-Im Editor (Reiter „Hintergrund“, „Bilder je Auflösung“) zeigt eine Liste die eigenen Zuordnungen,
+Im Editor (Reiter „Hintergrund“, „Bilder je Auflösung“) zeigt eine Liste das Standardbild mit
+seiner tatsächlichen Auflösung, die eigenen Zuordnungen,
 die im Ordner gefundenen Fassungen und für jeden angeschlossenen Monitor, welches Bild er bekommt.
 Zuordnungen lassen sich dort hinzufügen, ändern und entfernen. Wird ein Bild gewählt, das schon eine
 Auflösung im Namen trägt (`Wallpaper_1920x1080.jpg`), trägt der Editor `Wallpaper.jpg` ein – unter

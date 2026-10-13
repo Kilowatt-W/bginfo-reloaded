@@ -673,9 +673,9 @@ public sealed class MainForm : Form
 
         Heading(table, "Bilder je Auflösung");
         _resolutions.Columns.Add("Auflösung", LogicalToDeviceUnits(100));
-        _resolutions.Columns.Add("Bild", LogicalToDeviceUnits(250));
-        _resolutions.Columns.Add("Herkunft", LogicalToDeviceUnits(150));
-        _resolutions.Columns.Add("Verwendung auf diesem Rechner", LogicalToDeviceUnits(300));
+        _resolutions.Columns.Add("Bild", LogicalToDeviceUnits(230));
+        _resolutions.Columns.Add("Herkunft", LogicalToDeviceUnits(140));
+        _resolutions.Columns.Add("Verwendung auf diesem Rechner", LogicalToDeviceUnits(420));
         _resolutions.Size = new Size(LogicalToDeviceUnits(820), LogicalToDeviceUnits(170));
         _resolutions.DoubleClick += (_, _) => EditResolutionEntry(false);
         var resolutionButtons = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
@@ -1855,12 +1855,25 @@ public sealed class MainForm : Form
                 config.BaseDirectory = baseDirectory;
                 var result = new List<(string Resolution, string Image, string Origin, string Use, string Tag)>();
 
+                // Zuerst das Standardbild selbst - mit der Aufloesung, die es wirklich hat.
+                var configured = config.ResolveWallpaperPath();
+                var baseImage = ResolveBaseImage(config);
+                if (baseImage != null && File.Exists(baseImage))
+                {
+                    var size = WallpaperRenderer.TryGetImageSize(baseImage);
+                    result.Add((size is { } s ? $"{s.Width}x{s.Height}" : "?", baseImage,
+                        configured != null ? "Standardbild" : "Standardbild – Wallpaper des Benutzers", "", "base"));
+                }
+                else if (configured != null)
+                {
+                    result.Add(("–", configured, "Standardbild fehlt – nur Fassungen je Auflösung", "", "base"));
+                }
+
                 var overrides = config.WallpaperOverrides();
                 foreach (var (resolution, file) in overrides)
                 {
                     result.Add((resolution, file, File.Exists(file) ? "eigene Zuordnung" : "eigene Zuordnung – Datei fehlt!", "", "override"));
                 }
-                var configured = config.ResolveWallpaperPath();
                 if (configured != null)
                 {
                     foreach (var (file, width, height) in WallpaperState.ListResolutionVariants(configured))
@@ -1871,23 +1884,38 @@ public sealed class MainForm : Form
                     }
                 }
 
-                var baseImage = ResolveBaseImage(config);
+                // Feste Zeile: gibt es ein Bild fuer 1920 x 1080 (Zuordnung oder Datei im Ordner), steht
+                // es immer direkt unter dem Standardbild - die Aufloesung, die fast ueberall vorkommt.
+                const string fullHd = "1920x1080";
+                var pinned = result.Where(r => r.Tag != "base" && r.Resolution == fullHd).ToList();
+                if (pinned.Count > 0)
+                {
+                    result.RemoveAll(r => r.Tag != "base" && r.Resolution == fullHd);
+                    result.InsertRange(result.FindLastIndex(r => r.Tag == "base") + 1, pinned);
+                }
+
+                // Je Monitor: bei dem Bild vermerken, das er bekommt.
                 foreach (var monitor in WallpaperInterop.GetMonitors())
                 {
                     var key = $"{monitor.Width}x{monitor.Height}";
                     var (image, choice) = config.ResolveWallpaperFor(baseImage, monitor.Width, monitor.Height);
+                    var shownKey = key.Replace("x", " × ");
                     var use = $"Monitor {monitor.Number}: " + choice switch
                     {
                         WallpaperChoice.Override => "eigene Zuordnung",
                         WallpaperChoice.ExactVariant => "passt genau",
-                        WallpaperChoice.Base => $"kein eigenes Bild – verwendet wird {Path.GetFileName(image)}",
-                        WallpaperChoice.BestFit => $"kein eigenes Bild – am besten passt {Path.GetFileName(image)}",
+                        WallpaperChoice.Base => $"für {shownKey} gibt es kein eigenes Bild – Standardbild",
+                        WallpaperChoice.BestFit => $"für {shownKey} gibt es kein eigenes Bild – dieses passt am besten",
                         _ => "kein Hintergrundbild – einfarbiger Hintergrund"
                     };
-                    var index = result.FindIndex(r => r.Resolution == key && string.Equals(r.Image, image, StringComparison.OrdinalIgnoreCase));
-                    if (index >= 0)
+                    // Eigene Zuordnung zuerst suchen (Tag), sonst die Zeile mit diesem Bild.
+                    var index = choice == WallpaperChoice.Override
+                        ? result.FindIndex(r => r.Tag == "override" && r.Resolution == key)
+                        : result.FindIndex(r => r.Tag != "override" && string.Equals(r.Image, image, StringComparison.OrdinalIgnoreCase));
+                    if (image != null && index >= 0)
                     {
-                        result[index] = (result[index].Resolution, result[index].Image, result[index].Origin, use, result[index].Tag);
+                        var row = result[index];
+                        result[index] = (row.Resolution, row.Image, row.Origin, row.Use.Length > 0 ? $"{row.Use};  {use}" : use, row.Tag);
                     }
                     else
                     {
@@ -1908,7 +1936,7 @@ public sealed class MainForm : Form
             {
                 var shown = row.Image.Length == 0 ? "(kein eigenes Bild)" : ShortenPath(row.Image, baseDirectory);
                 var item = new ListViewItem(new[] { row.Resolution.Replace("x", " × "), shown, row.Origin, row.Use }) { Tag = row.Tag, ToolTipText = row.Image };
-                if (row.Tag != "override")
+                if (row.Tag is "found" or "monitor")
                 {
                     item.ForeColor = SystemColors.GrayText;
                 }

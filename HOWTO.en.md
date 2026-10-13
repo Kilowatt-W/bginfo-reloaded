@@ -471,7 +471,8 @@ resolution in its name, then the image without suffix, then the best fitting oth
 applies on every run – also when `--watch` renders again after a resolution change. If the file of
 an assignment is missing, the log gets a warning and the next step applies.
 
-In the editor (tab “Hintergrund”, “Bilder je Auflösung”) a list shows the own assignments, the
+In the editor (tab “Hintergrund”, “Bilder je Auflösung”) a list shows the default image with its
+actual resolution, the own assignments, the
 versions found in the folder and, for every connected monitor, which image it gets. Assignments can
 be added, changed and removed there. If an image is chosen that already carries a resolution in its
 name (`Wallpaper_1920x1080.jpg`), the editor enters `Wallpaper.jpg` – all versions are found under
