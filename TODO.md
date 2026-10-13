@@ -247,6 +247,9 @@ WMI-Dialog, Anzeige von Blöcken und Filtern. Noch von Hand durchzuklicken:
       als Standardbild; der Editor sagt bei der Auswahl, welche Datei als Standard gilt
 - [x] 2026-10-13 Version 2.16.0: Balken für Prozentwerte (`bar` je Zeile, `colors.barUsed`/`barFree`,
       `panel.barHeight`) – Laufwerke, RAM, Akku; mit Text darunter, ohne Text statt des Werts (drei Fälle gerendert)
+- [x] 2026-10-13 Version 2.16.2: „Aktualisieren“ ist grau, solange nichts Neueres bereitliegt; als neuer gilt auch
+      dieselbe Version mit neuerem Datum und anderer Größe; Editor startet auch, wenn der Teiler nicht gezeichnet
+      werden kann (GDI+-Fehler bei nicht benutzbarem Bildschirm)
 - [x] 2026-10-13 Version 2.16.1: Editor-Knopf „Aktualisieren“ – Update-Ordner sofort prüfen und holen, mit Meldung
       und Neustart-Angebot; ein schon getauschtes, noch laufendes Programm wird nicht erneut ersetzt
 - [x] 2026-10-13 Version 2.16.0: die ausgewählte Bilddatei gilt immer als Standardbild, auch mit Auflösung im

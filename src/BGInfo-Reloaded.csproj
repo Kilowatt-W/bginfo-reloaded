@@ -24,8 +24,8 @@
     <InvariantGlobalization>false</InvariantGlobalization>
     <PublishTrimmed>false</PublishTrimmed>
 
-    <Version>2.16.1</Version>
-    <FileVersion>2.16.1.0</FileVersion>
+    <Version>2.16.2</Version>
+    <FileVersion>2.16.2.0</FileVersion>
     <Product>BGInfo-Reloaded</Product>
     <AssemblyTitle>BGInfo-Reloaded</AssemblyTitle>
     <Description>Eigenstaendiger, quelloffener BGInfo-Ersatz ohne PowerShell- oder Installer-Abhaengigkeit.</Description>

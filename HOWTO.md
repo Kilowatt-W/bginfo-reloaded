@@ -103,7 +103,11 @@ BGInfo-Reloaded-Editor.exe BGInfo-Reloaded.json      eine vorhandene Datei öffn
   Tippen über Platzhalter, Bedeutung und Wert; mehrere Wörter müssen alle vorkommen. Esc oder ✕ leert es.
 - **Vorschau (Schalter in der Leiste):** blendet den Vorschaubereich rechts ein oder aus; ausgeblendet
   wird auch nicht gerendert. Die Wahl bleibt je Benutzer gespeichert.
-- **Aktualisieren (Knopf in der Leiste):** prüft den Update-Ordner sofort und holt Neueres – auch
+- **Aktualisieren (Knopf in der Leiste):** der Knopf ist grau, solange im Update-Ordner nichts
+  Neueres liegt, und wird farbig, sobald es etwas zu holen gibt (geprüft beim Start, nach dem
+  Speichern, nach einem Update und alle fünf Minuten). Als neuer gilt ein Programm mit höherer
+  Version – oder mit gleicher Version, wenn die Datei im Ordner ein neueres Datum und eine andere
+  Größe hat. Ein Klick prüft den Update-Ordner sofort und holt Neueres – auch
   wenn das automatische Prüfen ausgeschaltet ist. Danach wie beim Start: Meldung mit dem Ergebnis,
   bei aktualisiertem Editor „Jetzt neu starten“; ist alles aktuell, sagt er das. Ohne Ordner, aber
   mit eingetragenem GitHub-Repository läuft das Update über `BGInfo-Reloaded.exe --update`.

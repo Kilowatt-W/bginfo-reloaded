@@ -110,7 +110,11 @@ The tabs and buttons (German labels in parentheses):
   while typing, across placeholder, meaning and value; several words must all occur. Esc or ✕ clears it.
 - **Preview (Vorschau, toggle in the toolbar):** shows or hides the preview area on the right; while
   hidden nothing is rendered. The choice is remembered per user.
-- **Update (Aktualisieren, button in the toolbar):** checks the update folder immediately and
+- **Update (Aktualisieren, button in the toolbar):** the button is grey as long as the update
+  folder holds nothing newer and turns coloured as soon as there is something to fetch (checked on
+  start, after saving, after an update and every five minutes). A program counts as newer if its
+  version is higher – or, with the same version, if the file in the folder has a newer date and a
+  different size. A click checks the update folder immediately and
   fetches newer files – even if automatic checking is off. Then as on start: a message with the
   result and, if the editor was updated, “Jetzt neu starten” (restart now); if everything is up to
   date, it says so. Without a folder but with a GitHub repository entered, the update runs through

@@ -154,6 +154,8 @@ public sealed class MainForm : Form
         Controls.Add(status);
 
         _previewTimer.Tick += (_, _) => RenderPreview();
+        _updateStateTimer.Tick += (_, _) => RefreshUpdateState();
+        _updateStateTimer.Start();
         _currentTimer.Tick += (_, _) => UpdateCurrentValues();
 
         // Aendert sich Aufloesung oder Skalierung, waehrend der Editor offen ist (RDP-Fenster, Docking),
@@ -178,7 +180,16 @@ public sealed class MainForm : Form
 
         Load += (_, _) =>
         {
-            _split.SplitterDistance = Math.Min(_split.Width / 2, LogicalToDeviceUnits(860));
+            try
+            {
+                _split.SplitterDistance = Math.Min(_split.Width / 2, LogicalToDeviceUnits(860));
+            }
+            catch (Exception ex) when (ex is System.Runtime.InteropServices.ExternalException or InvalidOperationException or ArgumentException)
+            {
+                // Kein benutzbarer Bildschirm (gesperrte oder getrennte Sitzung): Windows kann den Teiler
+                // dann nicht zeichnen ("generic error in GDI+"). Die Aufteilung ist nur Komfort - der
+                // Editor soll trotzdem starten.
+            }
             _split.Panel2Collapsed = !_previewEnabled;
             if (fileToOpen != null && File.Exists(fileToOpen))
             {
@@ -250,7 +261,8 @@ public sealed class MainForm : Form
         bar.Items.Add(Button("Vorschau anzeigen", '\uE740', "Die aktuelle Darstellung als Vollbild zeigen – so, wie sie auf dem Desktop aussieht (Esc oder Klick schließt)", ShowFullscreenPreview));
         bar.Items.Add(Button("Jetzt anwenden", '\uE768', "Speichern und BGInfo-Reloaded.exe mit dieser Konfiguration ausführen", () => Apply(false)));
         bar.Items.Add(new ToolStripSeparator());
-        bar.Items.Add(Button("Aktualisieren", '\uE896', "Programm jetzt aktualisieren: den Update-Ordner aus der Konfiguration prüfen und Neueres holen –\r\nauch wenn das automatische Prüfen ausgeschaltet ist. Wurde der Editor selbst aktualisiert, bietet die Meldung den Neustart an.\r\nOhne Ordner, aber mit GitHub-Repository: Update über BGInfo-Reloaded.exe --update.", UpdateNow));
+        _updateIconSize = iconSize;
+        bar.Items.Add(_updateButton = Button("Aktualisieren", '\uE896', "Programm jetzt aktualisieren: den Update-Ordner aus der Konfiguration prüfen und Neueres holen –\r\nauch wenn das automatische Prüfen ausgeschaltet ist. Wurde der Editor selbst aktualisiert, bietet die Meldung den Neustart an.\r\nOhne Ordner, aber mit GitHub-Repository: Update über BGInfo-Reloaded.exe --update.", UpdateNow));
         bar.Items.Insert(bar.Items.Count - 2, Button("Anwenden und beenden", '\uE8FB', "Speichern, BGInfo-Reloaded.exe mit dieser Konfiguration ausführen und den Editor danach schließen.\r\nBei einem Fehler bleibt der Editor offen.", () => Apply(true)));
         return bar;
     }
@@ -259,7 +271,7 @@ public sealed class MainForm : Form
     /// Zeichnet ein Symbol aus der Windows-Symbolschrift in ein Bild. Fehlen beide Schriften (aeltere
     /// oder abgespeckte Systeme), bleibt das Bild leer und die Schaltflaeche zeigt nur ihren Text.
     /// </summary>
-    private static Bitmap GlyphIcon(char glyph, int size)
+    private static Bitmap GlyphIcon(char glyph, int size, Color? color = null)
     {
         var bitmap = new Bitmap(size, size);
         using var installed = new InstalledFontCollection();
@@ -274,7 +286,7 @@ public sealed class MainForm : Form
         using var graphics = Graphics.FromImage(bitmap);
         graphics.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
         using var font = new Font(family, size * 0.8f, FontStyle.Regular, GraphicsUnit.Pixel);
-        using var brush = new SolidBrush(SystemColors.ControlText);
+        using var brush = new SolidBrush(color ?? SystemColors.ControlText);
         using var format = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
         graphics.DrawString(glyph.ToString(), font, brush, new RectangleF(0, 0, size, size), format);
         return bitmap;
@@ -2498,6 +2510,7 @@ public sealed class MainForm : Form
     private void ShowConfig()
     {
         ReloadControls();
+        RefreshUpdateState();
         RefreshItems(0);
         LoadTags();
         UpdateTitle();
@@ -2634,6 +2647,100 @@ public sealed class MainForm : Form
     /// </summary>
     private void CheckUpdateFolderAtStart() => CheckUpdateFolder(manual: false);
 
+    // Knopf "Aktualisieren": grau, solange nichts Neueres bereitliegt; farbig, sobald es etwas zu holen gibt.
+    private ToolStripButton _updateButton = null!;
+    private int _updateIconSize;
+    private Bitmap? _updateIconNormal;
+    private Bitmap? _updateIconAccent;
+    private Font? _updateFontBold;
+    private int _updateStateGeneration;
+    private readonly System.Windows.Forms.Timer _updateStateTimer = new() { Interval = 5 * 60 * 1000 };
+    private static readonly Color UpdateAvailableColor = Color.FromArgb(0, 120, 215);
+
+    /// <summary>
+    /// Prueft im Hintergrund, ob im Update-Ordner etwas Neueres liegt (hoehere Version, oder gleiche
+    /// Version mit neuerem Datum und anderer Groesse; je nach Einstellung auch Konfiguration und
+    /// Hintergruende), und faerbt danach den Knopf. Ohne Ordner: mit eingetragenem GitHub-Repository
+    /// bleibt er bedienbar (das laesst sich nicht billig pruefen), sonst ist er grau.
+    /// </summary>
+    private async void RefreshUpdateState()
+    {
+        if (_updateButton == null)
+        {
+            return;
+        }
+        var generation = ++_updateStateGeneration;
+        void Show(bool enabled, bool highlight, string tip)
+        {
+            if (generation != _updateStateGeneration)
+            {
+                return;
+            }
+            _updateButton.Enabled = enabled;
+            _updateButton.ForeColor = highlight ? UpdateAvailableColor : SystemColors.ControlText;
+            _updateFontBold ??= new Font(Font, FontStyle.Bold);
+            _updateButton.Font = highlight ? _updateFontBold : Font;
+            // Beide Symbole einmal erzeugen und nur umschalten: ein Bild freizugeben, das die Leiste
+            // gerade noch zeichnet, endet in einem GDI+-Fehler.
+            _updateIconNormal ??= GlyphIcon('\uE896', _updateIconSize);
+            _updateIconAccent ??= GlyphIcon('\uE896', _updateIconSize, UpdateAvailableColor);
+            _updateButton.Image = highlight ? _updateIconAccent : _updateIconNormal;
+            _updateButton.ToolTipText = tip;
+        }
+
+        if (_path == null || string.IsNullOrWhiteSpace(_config.Update.Path))
+        {
+            var repo = _config.Update.Repo;
+            if (!string.IsNullOrWhiteSpace(repo) && _path != null)
+            {
+                Show(true, false, $"Programm jetzt über das GitHub-Repository {repo} aktualisieren (BGInfo-Reloaded.exe --update).\r\nOb dort etwas Neueres liegt, wird nicht vorab geprüft.");
+            }
+            else
+            {
+                Show(false, false, "Kein Update-Ordner eingetragen (Reiter „Autostart und Werkzeuge“, „Selbst-Update“).");
+            }
+            return;
+        }
+
+        var file = _path;
+        var json = _config.ToJson();
+        try
+        {
+            var (result, messages, folder) = await Task.Run(() =>
+            {
+                var snapshot = AppConfig.FromJson(json, file);
+                var path = snapshot.ResolveUpdatePath() ?? "";
+                var lines = new List<string>();
+                var outcome = path.Length == 0 ? null : FolderUpdater.Run(path, snapshot.Update, checkOnly: true, quiet: true, lines.Add);
+                return (outcome, lines, path);
+            });
+            if (result == null)
+            {
+                Show(false, false, "Kein Update-Ordner eingetragen.");
+            }
+            else if (!result.Reachable)
+            {
+                Show(false, false, $"Update-Ordner nicht erreichbar:\r\n{folder}");
+            }
+            else if (result.RestartPending)
+            {
+                Show(true, true, "Die neue Version ist schon geholt – sie wird mit dem nächsten Start aktiv. Klick: Neustart anbieten.");
+            }
+            else if (result.Changes > 0)
+            {
+                Show(true, true, $"Im Update-Ordner liegt etwas Neueres – Klick holt es:\r\n{string.Join("\r\n", messages)}\r\n\r\nOrdner: {folder}");
+            }
+            else
+            {
+                Show(false, false, $"Alles aktuell – im Update-Ordner liegt nichts Neueres.\r\nOrdner: {folder}\r\nGeprüft wird beim Start, nach dem Speichern und alle fünf Minuten.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Show(false, false, $"Update-Prüfung fehlgeschlagen: {ex.Message}");
+        }
+    }
+
     /// <summary>
     /// Knopf "Aktualisieren": prueft den Update-Ordner sofort und holt Neueres, egal ob das automatische
     /// Pruefen eingeschaltet ist - und sagt auch, wenn alles aktuell ist. Ohne Ordner, aber mit
@@ -2704,6 +2811,8 @@ public sealed class MainForm : Form
         {
             messages.Add($"Update-Prüfung fehlgeschlagen: {ex.Message}");
         }
+        // Was jetzt noch zu holen ist (oder dass ein Neustart aussteht), zeigt der Knopf.
+        RefreshUpdateState();
 
         if (messages.Count == 0)
         {
@@ -2903,6 +3012,7 @@ public sealed class MainForm : Form
         _dirty = false;
         _fileHadComments = false;
         UpdateTitle();
+        RefreshUpdateState();
         _status.Text = $"Gespeichert: {target}" + (removedDuplicates > 0 ? $" – {removedDuplicates} doppelte Einträge aus den Rechnerlisten entfernt" : "");
         return true;
     }

@@ -158,9 +158,15 @@ public static class FolderUpdater
         var available = ReadVersion(source);
         var installed = installedHere ? ReadVersion(local) : null;
         var newer = available != null && (!installedHere || installed == null || available > installed);
+        // Gleiche Version, aber eine andere Datei: zaehlt als neuer, wenn sie juenger ist UND eine andere
+        // Groesse hat (ein neu gebauter Stand ohne erhoehte Versionsnummer). Nie bei aelterem Datum -
+        // sonst wuerde ein alter Stand im Ordner einen neueren lokalen ersetzen.
+        var rebuilt = !newer && installedHere && available != null && available == installed && IsNewerFile(source, local);
+        newer |= rebuilt;
         if (!quiet || newer)
         {
-            log($"{name}: installiert {(installedHere ? installed?.ToString() ?? "unbekannt" : "nicht vorhanden")}, verfuegbar {available?.ToString() ?? "unbekannt (keine Dateiversion)"}");
+            log($"{name}: installiert {(installedHere ? installed?.ToString() ?? "unbekannt" : "nicht vorhanden")}, verfuegbar {available?.ToString() ?? "unbekannt (keine Dateiversion)"}"
+                + (rebuilt ? " - gleiche Version, aber neuere Datei (Datum und Groesse weichen ab)" : ""));
         }
         if (!newer)
         {
@@ -168,7 +174,7 @@ public static class FolderUpdater
         }
         if (checkOnly)
         {
-            log($"  -> neuere Version {available} verfuegbar");
+            log(rebuilt ? "  -> neuere Datei gleicher Version verfuegbar" : $"  -> neuere Version {available} verfuegbar");
             return 1;
         }
 
@@ -259,6 +265,14 @@ public static class FolderUpdater
             log($"Warnung: {name} konnte nicht geholt werden ({ex.Message}).");
             return 0;
         }
+    }
+
+    /// <summary>Juengeres Aenderungsdatum (mit 2 Sekunden Toleranz) und andere Groesse als die lokale Datei.</summary>
+    private static bool IsNewerFile(string source, string local)
+    {
+        var sourceInfo = new FileInfo(source);
+        var localInfo = new FileInfo(local);
+        return sourceInfo.Length != localInfo.Length && sourceInfo.LastWriteTimeUtc > localInfo.LastWriteTimeUtc.AddSeconds(2);
     }
 
     private static Version? ReadVersion(string file)
