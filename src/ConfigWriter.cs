@@ -51,6 +51,7 @@ internal static class ConfigWriter
         ["colors.value"] = "Werte",
         ["wallpaper.path"] = "festes Hintergrundbild; relativ zum Ordner dieser Datei; weglassen = Wallpaper des Benutzers",
         ["wallpaper.originalPath"] = "nur zur Information: von hier wurde das Bild beim ersten Start übernommen",
+        ["wallpaper.byResolution"] = "eigene Zuordnung je Auflösung, z. B. {\"3440x1440\": \".\\\\backgrounds\\\\breit.jpg\"} - hat Vorrang vor bild_3440x1440.jpg",
         ["wallpaper.fit"] = "Fill, Fit, Stretch, Center, Tile oder None (Originalgröße, Windows skaliert Bild samt Panel)",
         ["wallpaper.resolutionVariants"] = "je Monitor zuerst bild_3440x1440.jpg suchen, sonst das Bild ohne Zusatz",
         ["wallpaper.backgroundColor"] = "Farbe für Ränder und falls kein Bild vorhanden ist",

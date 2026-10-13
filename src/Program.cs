@@ -400,9 +400,7 @@ static class EntryPoint
         var rendered = new List<(MonitorTarget Monitor, string ImagePath)>();
         foreach (var monitor in monitors)
         {
-            var image = baseImage != null && config.Wallpaper.ResolutionVariants
-                ? WallpaperState.ResolveResolutionVariant(baseImage, monitor.Width, monitor.Height)
-                : baseImage;
+            var (image, choice) = config.ResolveWallpaperFor(baseImage, monitor.Width, monitor.Height);
             var withPanel = !perMonitor || config.Monitors.Panel == PanelMonitors.All || monitor.IsPrimary;
 
             string outputPath;
@@ -424,31 +422,25 @@ static class EntryPoint
             // nach welchem Dateinamen vergeblich gesucht wurde. Sonst ist von aussen nicht erkennbar,
             // ob die Variante fehlt, falsch heisst oder die Option aus ist.
             string imageNote;
-            if (image != null && !File.Exists(image))
+            var size = $"{monitor.Width}x{monitor.Height}";
+            if (image == null)
             {
-                // Es gibt nur Bilder fuer andere Aufloesungen und kein Bild ohne Zusatz.
-                var wanted = $"{Path.GetFileNameWithoutExtension(image)}_{monitor.Width}x{monitor.Height}{Path.GetExtension(image)}";
-                imageNote = $", ohne Hintergrundbild (weder {wanted} noch {Path.GetFileName(image)} vorhanden)";
-                image = null;
-            }
-            else if (image == null)
-            {
-                imageNote = ", ohne Hintergrundbild";
-            }
-            else if (image != baseImage)
-            {
-                imageNote = Path.GetFileNameWithoutExtension(image).EndsWith($"{monitor.Width}x{monitor.Height}", StringComparison.OrdinalIgnoreCase)
-                    ? $", Hintergrund {Path.GetFileName(image)} (eigenes Bild fuer diese Aufloesung)"
-                    : $", Hintergrund {Path.GetFileName(image)} (kein Bild fuer {monitor.Width}x{monitor.Height} und kein {Path.GetFileName(baseImage)} - am besten passendes Bild gewaehlt)";
-            }
-            else if (config.Wallpaper.ResolutionVariants)
-            {
-                var wanted = $"{Path.GetFileNameWithoutExtension(image)}_{monitor.Width}x{monitor.Height}{Path.GetExtension(image)}";
-                imageNote = $", Hintergrund {Path.GetFileName(image)} (kein {wanted} im selben Ordner gefunden)";
+                // Mit Standardbild, aber ohne Treffer: es gibt nur Bilder fuer andere Aufloesungen bzw. gar keins.
+                imageNote = baseImage == null
+                    ? ", ohne Hintergrundbild"
+                    : $", ohne Hintergrundbild (weder {Path.GetFileNameWithoutExtension(baseImage)}_{size}{Path.GetExtension(baseImage)} noch {Path.GetFileName(baseImage)} vorhanden)";
             }
             else
             {
-                imageNote = $", Hintergrund {Path.GetFileName(image)} (wallpaper.resolutionVariants ist aus)";
+                var wanted = baseImage == null ? "" : $"{Path.GetFileNameWithoutExtension(baseImage)}_{size}{Path.GetExtension(baseImage)}";
+                imageNote = $", Hintergrund {Path.GetFileName(image)} " + choice switch
+                {
+                    WallpaperChoice.Override => $"(eigene Zuordnung fuer {size} aus wallpaper.byResolution)",
+                    WallpaperChoice.ExactVariant => "(eigenes Bild fuer diese Aufloesung)",
+                    WallpaperChoice.BestFit => $"(kein Bild fuer {size} und kein {Path.GetFileName(baseImage)} - am besten passendes Bild gewaehlt)",
+                    _ when config.Wallpaper.ResolutionVariants => $"(kein {wanted} im selben Ordner gefunden)",
+                    _ => "(wallpaper.resolutionVariants ist aus)"
+                };
             }
             Console.WriteLine($"Rendere {monitor}{(withPanel ? "" : ", ohne Info-Panel")}{imageNote}");
             if (image != null && WallpaperRenderer.TryGetImageSize(image) is { } imageSize

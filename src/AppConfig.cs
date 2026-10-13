@@ -398,6 +398,16 @@ public sealed class ColorConfig
     public string Value { get; set; } = "#82DCD2"; // Aquamarine-Ton, PowerBGInfo-Setup nachempfunden
 }
 
+/// <summary>Wie das Bild fuer einen Monitor gefunden wurde (siehe <see cref="AppConfig.ResolveWallpaperFor"/>).</summary>
+public enum WallpaperChoice
+{
+    None,
+    Override,
+    ExactVariant,
+    Base,
+    BestFit
+}
+
 public sealed class WallpaperConfig
 {
     /// <summary>
@@ -425,6 +435,13 @@ public sealed class WallpaperConfig
     /// und ohne solche Dateien aendert sich nichts.
     /// </summary>
     public bool ResolutionVariants { get; set; } = true;
+
+    /// <summary>
+    /// Eigene Zuordnung je Aufloesung: "3440x1440" -> Bilddatei (relativ zum Ordner der Konfiguration).
+    /// Hat Vorrang vor den Dateien mit angehaengter Aufloesung - fuer Aufloesungen, zu denen es im
+    /// Ordner kein passendes Bild gibt. Null/leer = keine.
+    /// </summary>
+    public Dictionary<string, string>? ByResolution { get; set; }
 
     /// <summary>Hintergrundfarbe fuer Raender (Fit, Center) und falls gar kein Bild vorhanden/lesbar ist.</summary>
     public string BackgroundColor { get; set; } = "#101218";
@@ -706,6 +723,72 @@ public sealed class AppConfig
     }
 
     /// <summary>Kommentiertes JSON - siehe <see cref="ConfigWriter"/>.</summary>
+    /// <summary>Einheitliche Schreibweise einer Aufloesung als Schluessel: "3440x1440" (auch aus "3440 × 1440"); null, wenn es keine ist.</summary>
+    public static string? NormalizeResolution(string? text)
+    {
+        var match = System.Text.RegularExpressions.Regex.Match(text ?? "", @"^\s*(\d{2,5})\s*[xX×*]\s*(\d{2,5})\s*$");
+        return match.Success ? $"{int.Parse(match.Groups[1].Value)}x{int.Parse(match.Groups[2].Value)}" : null;
+    }
+
+    /// <summary>Die eigenen Zuordnungen aus wallpaper.byResolution mit aufgeloesten Pfaden, in der Reihenfolge der Datei.</summary>
+    public List<(string Resolution, string Path)> WallpaperOverrides()
+    {
+        var result = new List<(string, string)>();
+        foreach (var (key, value) in Wallpaper.ByResolution ?? new())
+        {
+            if (NormalizeResolution(key) is { } resolution && !string.IsNullOrWhiteSpace(value))
+            {
+                var path = Environment.ExpandEnvironmentVariables(value.Trim());
+                result.Add((resolution, Path.IsPathRooted(path) ? path : Path.GetFullPath(Path.Combine(BaseDirectory, path))));
+            }
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Welches Bild ein Monitor dieser Aufloesung bekommt und warum. Reihenfolge: eigene Zuordnung
+    /// (wallpaper.byResolution), Datei mit dieser Aufloesung im Namen, das Bild ohne Zusatz, die am
+    /// besten passende andere Fassung. <paramref name="baseImage"/> ist das Standardbild (wallpaper.path
+    /// bzw. das Wallpaper des Benutzers) oder null.
+    /// </summary>
+    public (string? Image, WallpaperChoice Choice) ResolveWallpaperFor(string? baseImage, int width, int height)
+    {
+        var key = $"{width}x{height}";
+        foreach (var (resolution, path) in WallpaperOverrides())
+        {
+            if (resolution == key)
+            {
+                if (File.Exists(path))
+                {
+                    return (path, WallpaperChoice.Override);
+                }
+                Console.WriteLine($"Warnung: wallpaper.byResolution[{key}] '{path}' nicht gefunden - verwende das Standardbild.");
+                break;
+            }
+        }
+
+        if (baseImage == null)
+        {
+            return (null, WallpaperChoice.None);
+        }
+        if (!Wallpaper.ResolutionVariants)
+        {
+            return File.Exists(baseImage) ? (baseImage, WallpaperChoice.Base) : (null, WallpaperChoice.None);
+        }
+        var image = WallpaperState.ResolveResolutionVariant(baseImage, width, height);
+        if (!File.Exists(image))
+        {
+            return (null, WallpaperChoice.None);
+        }
+        if (string.Equals(image, baseImage, StringComparison.OrdinalIgnoreCase))
+        {
+            return (image, WallpaperChoice.Base);
+        }
+        return (image, Path.GetFileNameWithoutExtension(image).EndsWith(key, StringComparison.OrdinalIgnoreCase)
+            ? WallpaperChoice.ExactVariant
+            : WallpaperChoice.BestFit);
+    }
+
     /// <summary>update.path mit aufgeloesten Umgebungsvariablen, relativ zu <see cref="BaseDirectory"/>; null, wenn keiner konfiguriert ist.</summary>
     public string? ResolveUpdatePath()
     {

@@ -183,6 +183,10 @@ echtes Windows nötig, das in dieser Entwicklungsumgebung nicht zur Verfügung s
 - **Serialisierung (`AppConfig.JsonOptions`)**: `WhenWritingNull`, nicht `WhenWritingDefault` –
   mehrere Optionen haben Standardwerte ungleich `false`/0/erster Enum-Wert; mit `WhenWritingDefault`
   ginge z.B. `scaleWithDpi: false` oder `fit: None` beim Speichern verloren.
+- **Welches Bild ein Monitor bekommt**, entscheidet allein `AppConfig.ResolveWallpaperFor` (eigene
+  Zuordnung aus `wallpaper.byResolution`, dann Datei mit Auflösung im Namen, dann Standardbild, dann
+  am besten passende Fassung) – exe, Editor-Vorschau und die Liste im Editor fragen dieselbe Stelle.
+  Gefundene Dateien werden nie in die JSON geschrieben, nur die eigenen Zuordnungen.
 - **Relative Pfade** in der Konfiguration (`wallpaper.path`) gelten relativ zu
   `AppConfig.BaseDirectory` (Ordner der Konfigurationsdatei) – immer über
   `ResolveWallpaperPath()` auflösen, nie über das Arbeitsverzeichnis.

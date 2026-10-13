@@ -440,6 +440,32 @@ wird für eine nicht vorhandene Auflösung das am besten passende Bild genommen 
 die skalierte; welche das ist, zeigt `{resolution}` bzw. das Log (`Rendere Monitor …`). Welches Bild
 verwendet wurde, steht ebenfalls im Log.
 
+#### Eigene Zuordnung je Auflösung (`wallpaper.byResolution`)
+
+Für Auflösungen, zu denen es im Ordner kein passendes Bild gibt, lässt sich ein beliebiges Bild
+hinterlegen:
+
+```jsonc
+"wallpaper": {
+  "path": ".\\backgrounds\\Wallpaper.jpg",
+  "byResolution": {
+    "3440x1440": ".\\backgrounds\\breit.jpg",
+    "2560x1600": "\\\\fileserver.example.com\\share\\bginfo\\notebook.jpg"
+  }
+}
+```
+
+Reihenfolge je Monitor: eigene Zuordnung für genau diese Auflösung, dann die Datei mit dieser
+Auflösung im Namen, dann das Bild ohne Zusatz, dann die am besten passende andere Fassung. Das gilt
+bei jedem Lauf – auch wenn `--watch` nach einem Wechsel der Auflösung neu rendert. Fehlt die Datei
+einer Zuordnung, gibt es eine Warnung im Log und es geht mit dem nächsten Schritt weiter.
+
+Im Editor (Reiter „Hintergrund“, „Bilder je Auflösung“) zeigt eine Liste die eigenen Zuordnungen,
+die im Ordner gefundenen Fassungen und für jeden angeschlossenen Monitor, welches Bild er bekommt.
+Zuordnungen lassen sich dort hinzufügen, ändern und entfernen. Wird ein Bild gewählt, das schon eine
+Auflösung im Namen trägt (`Wallpaper_1920x1080.jpg`), trägt der Editor `Wallpaper.jpg` ein – unter
+diesem Namen werden alle Fassungen gefunden; die Datei selbst muss es nicht geben.
+
 ### Mehrere Monitore (`monitors`)
 
 | Einstellung | Wert | Wirkung |

@@ -233,5 +233,8 @@ WMI-Dialog, Anzeige von Blöcken und Filtern. Noch von Hand durchzuklicken:
 - [x] 2026-10-12 Version 2.13.1: Update-Meldung des Editors mit „Jetzt neu starten“, wenn er sich selbst
       aktualisiert hat (geprüft: alter Prozess endet, neuer startet mit derselben Datei)
 - [x] 2026-10-12 Version 2.13.2: Editor-Knopf „Anwenden und beenden“ (geprüft: exe läuft mit Exit 0, Editor schließt sich)
+- [x] 2026-10-13 Version 2.14.0: Bilder je Auflösung – Liste im Editor (gefundene Fassungen, eigene Zuordnungen,
+      Verwendung je Monitor), `wallpaper.byResolution`, Auflösung im Namen des gewählten Bildes wird entfernt
+      (exe: Ordnerfassungen, Zuordnung, fehlende Datei geprüft; Editor: Liste per Bildschirmfoto)
 - [x] 2026-10-01 Rendering von SixLabors ImageSharp auf `System.Drawing.Common` (GDI+, MIT)
       umgestellt – Entscheidung Rendering-Bibliothek damit erledigt, kein Lizenzthema mehr

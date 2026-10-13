@@ -56,6 +56,9 @@ public sealed class MainForm : Form
     private readonly TextBox _itemWhen = new() { Dock = DockStyle.Fill, PlaceholderText = "z. B. {systemtype} = Server   oder   {env:STANDORT} != Berlin" };
     private readonly DataGridView _fields = new() { Dock = DockStyle.Fill, AllowUserToResizeRows = false, RowHeadersWidth = 30, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill, BackgroundColor = SystemColors.Window, BorderStyle = BorderStyle.FixedSingle };
     private bool _tagsStale;
+    // Reiter "Hintergrund": gefundene Bilder je Aufloesung und eigene Zuordnungen (wallpaper.byResolution).
+    private readonly ListView _resolutions = new() { View = View.Details, FullRowSelect = true, MultiSelect = false, HideSelection = false };
+    private int _resolutionGeneration;
     private readonly TextBox _tagSearch = new() { Dock = DockStyle.Fill, PlaceholderText = "in Platzhalter, Bedeutung und Wert suchen …" };
     // Alle Platzhalter in Listenreihenfolge; angezeigt werden die, die zur Suche passen.
     private readonly List<ListViewItem> _allTags = new();
@@ -166,6 +169,7 @@ public sealed class MainForm : Form
                     RefreshDisplayInfo();
                     UpdateTitle();
                     SchedulePreview();
+                    RefreshResolutionList(); // andere Aufloesung, anderes Bild
                 });
             }
         }
@@ -638,8 +642,15 @@ public sealed class MainForm : Form
             {
                 // Liegt das Bild neben der Konfigurationsdatei, relativ eintragen - dann funktioniert
                 // das Paar aus Datei und Bild in jedem Ordner, in den es verteilt wird.
-                var sameFolder = _path != null && string.Equals(Path.GetDirectoryName(dialog.FileName), Path.GetDirectoryName(_path), StringComparison.OrdinalIgnoreCase);
-                path.Text = sameFolder ? @".\" + Path.GetFileName(dialog.FileName) : dialog.FileName;
+                // Traegt der Name schon eine Aufloesung (bild_1920x1080.jpg), das Bild ohne Zusatz eintragen:
+                // darunter werden alle Fassungen gefunden - die Datei selbst muss es dann nicht geben.
+                var chosen = WallpaperState.StripResolutionSuffix(dialog.FileName);
+                var sameFolder = _path != null && string.Equals(Path.GetDirectoryName(chosen), Path.GetDirectoryName(_path), StringComparison.OrdinalIgnoreCase);
+                path.Text = sameFolder ? @".\" + Path.GetFileName(chosen) : chosen;
+                if (!string.Equals(chosen, dialog.FileName, StringComparison.OrdinalIgnoreCase))
+                {
+                    _status.Text = $"{Path.GetFileName(dialog.FileName)} trägt eine Auflösung im Namen – eingetragen ist {Path.GetFileName(chosen)}, die Fassungen je Auflösung stehen in der Liste darunter.";
+                }
             }
         };
         var pathRow = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
@@ -659,6 +670,31 @@ public sealed class MainForm : Form
         }, () => _config.Wallpaper.Fit, v => _config.Wallpaper.Fit = v));
         Row(table, "", Check("Eigenes Bild je Auflösung bevorzugen (z. B. bild_3440x1440.jpg)", () => _config.Wallpaper.ResolutionVariants, v => _config.Wallpaper.ResolutionVariants = v));
         Row(table, "Hintergrundfarbe (Ränder, kein Bild)", ColorButton(() => _config.Wallpaper.BackgroundColor, v => _config.Wallpaper.BackgroundColor = v));
+
+        Heading(table, "Bilder je Auflösung");
+        _resolutions.Columns.Add("Auflösung", LogicalToDeviceUnits(100));
+        _resolutions.Columns.Add("Bild", LogicalToDeviceUnits(250));
+        _resolutions.Columns.Add("Herkunft", LogicalToDeviceUnits(150));
+        _resolutions.Columns.Add("Verwendung auf diesem Rechner", LogicalToDeviceUnits(300));
+        _resolutions.Size = new Size(LogicalToDeviceUnits(820), LogicalToDeviceUnits(170));
+        _resolutions.DoubleClick += (_, _) => EditResolutionEntry(false);
+        var resolutionButtons = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
+        void ResolutionButton(string text, string tip, Action action)
+        {
+            var button = new Button { Text = text, AutoSize = true, Margin = new Padding(0, 0, 6, 0) };
+            button.Click += (_, _) => action();
+            _tips.SetToolTip(button, tip);
+            resolutionButtons.Controls.Add(button);
+        }
+        ResolutionButton("Zuordnung hinzufügen…", "Für eine Auflösung ein eigenes Bild hinterlegen", () => EditResolutionEntry(true));
+        ResolutionButton("Ändern…", "Die markierte Zuordnung ändern – bei einem gefundenen Bild: eine eigene Zuordnung für diese Auflösung anlegen (auch per Doppelklick)", () => EditResolutionEntry(false));
+        ResolutionButton("Entfernen", "Die markierte eigene Zuordnung entfernen (Dateien werden nicht gelöscht)", RemoveResolutionEntry);
+        ResolutionButton("Neu einlesen", "Den Ordner des Bildes erneut durchsuchen", RefreshResolutionList);
+        Row(table, "", _resolutions);
+        Row(table, "", resolutionButtons);
+        Row(table, "", Hint("Gefunden werden Dateien neben dem Bild oben, die dessen Namen mit angehängter Auflösung tragen (bild_3440x1440.jpg).\r\nEine eigene Zuordnung hat Vorrang und gilt auch für Auflösungen ohne passende Datei. Gespeichert werden nur die eigenen Zuordnungen;\r\ndie Dateien im Ordner sucht das Programm bei jedem Lauf frisch – auch nach einem Wechsel der Auflösung."));
+        _loaders.Add(RefreshResolutionList);
+        path.TextChanged += (_, _) => RefreshResolutionList();
 
         Heading(table, "Mehrere Monitore");
         Row(table, "Bilder", Combo(new[]
@@ -1799,6 +1835,214 @@ public sealed class MainForm : Form
     /// <summary>Ordner, auf den sich relative Pfade beziehen - bei einer noch ungespeicherten Datei der Ordner des Editors.</summary>
     private string ConfigDirectory => _path != null ? Path.GetDirectoryName(_path)! : Path.GetDirectoryName(Environment.ProcessPath) ?? "";
 
+    // ------------------------------------------------------------------ Bilder je Aufloesung
+
+    /// <summary>
+    /// Fuellt die Liste "Bilder je Aufloesung": eigene Zuordnungen, im Ordner gefundene Fassungen und -
+    /// fuer jeden angeschlossenen Monitor - welches Bild er bekommt. Der Ordner wird im Hintergrund
+    /// gelesen, damit ein nicht erreichbarer Share das Fenster nicht blockiert.
+    /// </summary>
+    private async void RefreshResolutionList()
+    {
+        var generation = ++_resolutionGeneration;
+        var json = _config.ToJson();
+        var baseDirectory = ConfigDirectory;
+        try
+        {
+            var rows = await Task.Run(() =>
+            {
+                var config = AppConfig.FromJson(json, "Editor");
+                config.BaseDirectory = baseDirectory;
+                var result = new List<(string Resolution, string Image, string Origin, string Use, string Tag)>();
+
+                var overrides = config.WallpaperOverrides();
+                foreach (var (resolution, file) in overrides)
+                {
+                    result.Add((resolution, file, File.Exists(file) ? "eigene Zuordnung" : "eigene Zuordnung – Datei fehlt!", "", "override"));
+                }
+                var configured = config.ResolveWallpaperPath();
+                if (configured != null)
+                {
+                    foreach (var (file, width, height) in WallpaperState.ListResolutionVariants(configured))
+                    {
+                        var key = $"{width}x{height}";
+                        var covered = overrides.Any(o => o.Resolution == key && File.Exists(o.Path));
+                        result.Add((key, file, covered ? "im Ordner gefunden (überdeckt)" : "im Ordner gefunden", "", "found"));
+                    }
+                }
+
+                var baseImage = ResolveBaseImage(config);
+                foreach (var monitor in WallpaperInterop.GetMonitors())
+                {
+                    var key = $"{monitor.Width}x{monitor.Height}";
+                    var (image, choice) = config.ResolveWallpaperFor(baseImage, monitor.Width, monitor.Height);
+                    var use = $"Monitor {monitor.Number}: " + choice switch
+                    {
+                        WallpaperChoice.Override => "eigene Zuordnung",
+                        WallpaperChoice.ExactVariant => "passt genau",
+                        WallpaperChoice.Base => $"kein eigenes Bild – verwendet wird {Path.GetFileName(image)}",
+                        WallpaperChoice.BestFit => $"kein eigenes Bild – am besten passt {Path.GetFileName(image)}",
+                        _ => "kein Hintergrundbild – einfarbiger Hintergrund"
+                    };
+                    var index = result.FindIndex(r => r.Resolution == key && string.Equals(r.Image, image, StringComparison.OrdinalIgnoreCase));
+                    if (index >= 0)
+                    {
+                        result[index] = (result[index].Resolution, result[index].Image, result[index].Origin, use, result[index].Tag);
+                    }
+                    else
+                    {
+                        result.Add((key, "", "–", use, "monitor"));
+                    }
+                }
+                return result;
+            });
+            if (generation != _resolutionGeneration)
+            {
+                return;
+            }
+
+            var selected = _resolutions.SelectedItems.Count > 0 ? _resolutions.SelectedItems[0].Text : null;
+            _resolutions.BeginUpdate();
+            _resolutions.Items.Clear();
+            foreach (var row in rows)
+            {
+                var shown = row.Image.Length == 0 ? "(kein eigenes Bild)" : ShortenPath(row.Image, baseDirectory);
+                var item = new ListViewItem(new[] { row.Resolution.Replace("x", " × "), shown, row.Origin, row.Use }) { Tag = row.Tag, ToolTipText = row.Image };
+                if (row.Tag != "override")
+                {
+                    item.ForeColor = SystemColors.GrayText;
+                }
+                if (row.Origin.Contains("fehlt"))
+                {
+                    item.ForeColor = Color.Firebrick;
+                }
+                item.Selected = item.Text == selected;
+                _resolutions.Items.Add(item);
+            }
+            _resolutions.ShowItemToolTips = true;
+            _resolutions.EndUpdate();
+        }
+        catch (Exception ex)
+        {
+            _status.Text = $"Bilder je Auflösung konnten nicht ermittelt werden: {ex.Message}";
+        }
+    }
+
+    /// <summary>Pfad relativ zum Ordner der Konfiguration zeigen, wenn er darin liegt.</summary>
+    private static string ShortenPath(string file, string baseDirectory)
+    {
+        var prefix = baseDirectory.TrimEnd('\\') + "\\";
+        return file.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ? @".\" + file[prefix.Length..] : file;
+    }
+
+    /// <summary>
+    /// Eigene Zuordnung anlegen oder aendern. Bei einer gefundenen Datei oder einer Monitorzeile wird
+    /// fuer deren Aufloesung eine neue Zuordnung vorgeschlagen.
+    /// </summary>
+    private void EditResolutionEntry(bool add)
+    {
+        var selected = !add && _resolutions.SelectedItems.Count > 0 ? _resolutions.SelectedItems[0] : null;
+        if (!add && selected == null)
+        {
+            _status.Text = "Zum Ändern zuerst eine Zeile in „Bilder je Auflösung“ markieren.";
+            return;
+        }
+        var oldKey = selected != null ? AppConfig.NormalizeResolution(selected.Text) : null;
+        var isOverride = selected?.Tag as string == "override";
+        var map = _config.Wallpaper.ByResolution ?? new Dictionary<string, string>();
+        var existingKey = oldKey == null ? null : map.Keys.FirstOrDefault(k => AppConfig.NormalizeResolution(k) == oldKey);
+        var file = isOverride && existingKey != null ? map[existingKey] : "";
+
+        using var dialog = new Form
+        {
+            Text = isOverride ? "Zuordnung ändern" : "Zuordnung hinzufügen",
+            FormBorderStyle = FormBorderStyle.FixedDialog, MinimizeBox = false, MaximizeBox = false, ShowInTaskbar = false,
+            StartPosition = FormStartPosition.CenterParent, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(12), Font = Font
+        };
+        var resolution = new ComboBox { Width = LogicalToDeviceUnits(160), DropDownStyle = ComboBoxStyle.DropDown };
+        resolution.Items.AddRange(WallpaperInterop.GetMonitors().Select(m => $"{m.Width}x{m.Height}")
+            .Concat(new[] { "1920x1080", "2560x1440", "3440x1440", "3840x2160", "5120x1440", "1920x1200", "2560x1600", "1366x768" }).Distinct().Cast<object>().ToArray());
+        resolution.Text = oldKey ?? (resolution.Items.Count > 0 ? (string)resolution.Items[0]! : "");
+        var image = new TextBox { Width = LogicalToDeviceUnits(420), Text = file };
+        var browse = new Button { Text = "…", AutoSize = true };
+        browse.Click += (_, _) =>
+        {
+            using var open = new OpenFileDialog { Filter = "Bilder (*.jpg;*.jpeg;*.png;*.bmp;*.gif;*.tif)|*.jpg;*.jpeg;*.png;*.bmp;*.gif;*.tif;*.tiff|Alle Dateien|*.*" };
+            if (open.ShowDialog(dialog) == DialogResult.OK)
+            {
+                // Im Ordner der Konfiguration (oder darunter) relativ eintragen - dann wandert die Zuordnung mit.
+                image.Text = ShortenPath(open.FileName, ConfigDirectory);
+            }
+        };
+        var accept = new Button { Text = "OK", DialogResult = DialogResult.OK, AutoSize = true };
+        var cancel = new Button { Text = "Abbrechen", DialogResult = DialogResult.Cancel, AutoSize = true };
+        var layout = new TableLayoutPanel { AutoSize = true, ColumnCount = 3, Dock = DockStyle.Fill };
+        layout.Controls.Add(new Label { Text = "Auflösung (Breite x Höhe)", AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(3, 7, 12, 7) });
+        layout.Controls.Add(resolution);
+        layout.Controls.Add(new Label());
+        layout.Controls.Add(new Label { Text = "Bilddatei", AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(3, 7, 12, 7) });
+        layout.Controls.Add(image);
+        layout.Controls.Add(browse);
+        var buttons = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.RightToLeft, Dock = DockStyle.Fill, Margin = new Padding(0, 12, 0, 0) };
+        buttons.Controls.Add(cancel);
+        buttons.Controls.Add(accept);
+        layout.Controls.Add(buttons);
+        layout.SetColumnSpan(buttons, 3);
+        dialog.Controls.Add(layout);
+        dialog.AcceptButton = accept;
+        dialog.CancelButton = cancel;
+
+        while (dialog.ShowDialog(this) == DialogResult.OK)
+        {
+            var key = AppConfig.NormalizeResolution(resolution.Text);
+            if (key == null)
+            {
+                MessageBox.Show(dialog, "Die Auflösung bitte als Breite x Höhe angeben, z. B. 3440x1440.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                continue;
+            }
+            if (string.IsNullOrWhiteSpace(image.Text))
+            {
+                MessageBox.Show(dialog, "Bitte eine Bilddatei angeben.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                continue;
+            }
+            if (isOverride && existingKey != null)
+            {
+                map.Remove(existingKey);
+            }
+            foreach (var same in map.Keys.Where(k => AppConfig.NormalizeResolution(k) == key).ToList())
+            {
+                map.Remove(same);
+            }
+            map[key] = image.Text.Trim();
+            _config.Wallpaper.ByResolution = map;
+            Changed();
+            RefreshResolutionList();
+            return;
+        }
+    }
+
+    private void RemoveResolutionEntry()
+    {
+        if (_resolutions.SelectedItems.Count == 0 || _resolutions.SelectedItems[0].Tag as string != "override")
+        {
+            _status.Text = "Entfernen lassen sich nur eigene Zuordnungen – gefundene Dateien bleiben, wo sie sind.";
+            return;
+        }
+        var key = AppConfig.NormalizeResolution(_resolutions.SelectedItems[0].Text);
+        var map = _config.Wallpaper.ByResolution;
+        if (map == null || key == null)
+        {
+            return;
+        }
+        foreach (var same in map.Keys.Where(k => AppConfig.NormalizeResolution(k) == key).ToList())
+        {
+            map.Remove(same);
+        }
+        _config.Wallpaper.ByResolution = map.Count > 0 ? map : null;
+        Changed();
+        RefreshResolutionList();
+    }
+
     /// <summary>Zeigt die Platzhalter, die alle Suchwoerter enthalten (in irgendeiner Spalte, Gross-/Kleinschreibung egal).</summary>
     private void ApplyTagFilter()
     {
@@ -2301,10 +2545,9 @@ public sealed class MainForm : Form
 
             foreach (var monitor in WallpaperInterop.GetMonitors())
             {
-                var image = probe.Wallpaper.ResolutionVariants
-                    ? WallpaperState.ResolveResolutionVariant(baseImage, monitor.Width, monitor.Height)
-                    : baseImage;
-                if (!File.Exists(image) || WallpaperRenderer.TryGetImageSize(image) is not { } size
+                // Eine eigene Zuordnung fuer diese Aufloesung ist eine bewusste Wahl - dann nicht nachfragen.
+                var (image, choice) = probe.ResolveWallpaperFor(baseImage, monitor.Width, monitor.Height);
+                if (image == null || choice == WallpaperChoice.Override || WallpaperRenderer.TryGetImageSize(image) is not { } size
                     || !WallpaperRenderer.CutsOffImage(fit, size, monitor))
                 {
                     continue;
@@ -2643,15 +2886,8 @@ public sealed class MainForm : Form
         var allowed = config.Hosts.Allows(hostNames, out var reason);
         var lines = SystemInfoCollector.Collect(config);
 
-        var image = ResolveBaseImage(config);
-        if (image != null && config.Wallpaper.ResolutionVariants)
-        {
-            image = WallpaperState.ResolveResolutionVariant(image, monitor.Width, monitor.Height);
-        }
-        if (image != null && !File.Exists(image))
-        {
-            image = null; // nur Bilder fuer andere Aufloesungen vorhanden
-        }
+        // Dieselbe Auswahl wie in BGInfo-Reloaded.exe: eigene Zuordnung, Bild je Aufloesung, Standardbild.
+        var (image, _) = config.ResolveWallpaperFor(ResolveBaseImage(config), monitor.Width, monitor.Height);
 
         var panel = WallpaperRenderer.Render(lines, file, image, config, monitor);
 

@@ -41,6 +41,8 @@
     // true (Standard): je Monitor zuerst "wallpaper_3440x1440.jpg" (auch -3440x1440 / 3440x1440 ohne
     // Trenner) suchen, sonst das Bild ohne Zusatz nehmen
     "resolutionVariants": true,
+    // Eigene Zuordnung je Aufloesung - hat Vorrang und gilt auch ohne passende Datei im Ordner:
+    // "byResolution": { "3440x1440": ".\\backgrounds\\breit.jpg" },
     "backgroundColor": "#101218"
   },
   "monitors": {

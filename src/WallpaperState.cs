@@ -214,6 +214,27 @@ public static class WallpaperState
     /// </summary>
     public static bool HasAnyResolutionVariant(string imagePath) => FindResolutionVariants(imagePath).Count > 0;
 
+    /// <summary>Alle Fassungen des Bildes mit angehaengter Aufloesung im selben Ordner, nach Groesse sortiert.</summary>
+    public static List<(string Path, int Width, int Height)> ListResolutionVariants(string imagePath) =>
+        FindResolutionVariants(imagePath).OrderBy(v => (long)v.Width * v.Height).ThenBy(v => v.Width).ToList();
+
+    /// <summary>
+    /// "bild_1920x1080.jpg" (auch mit "-" oder ohne Trenner) -> "bild.jpg": der Name, unter dem alle
+    /// Fassungen gefunden werden. Ein Name ohne Aufloesung bleibt, wie er ist.
+    /// </summary>
+    public static string StripResolutionSuffix(string imagePath)
+    {
+        var name = Path.GetFileNameWithoutExtension(imagePath);
+        var match = System.Text.RegularExpressions.Regex.Match(name, @"^(.+?)[_-]?\d{2,5}x\d{2,5}$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (!match.Success)
+        {
+            return imagePath;
+        }
+        var directory = Path.GetDirectoryName(imagePath);
+        var file = match.Groups[1].Value + Path.GetExtension(imagePath);
+        return string.IsNullOrEmpty(directory) ? file : Path.Combine(directory, file);
+    }
+
     /// <summary>
     /// Sucht zu einem Bild die Datei fuer eine Aufloesung, im selben Ordner und mit derselben Endung:
     /// 1. exakt passend ("bild_3440x1440.jpg", auch "bild-3440x1440.jpg" oder "bild3440x1440.jpg"),
