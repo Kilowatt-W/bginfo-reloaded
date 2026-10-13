@@ -35,10 +35,12 @@ jobs:
       - name: BGInfo-Reloaded.exe bauen
         run: dotnet publish src/BGInfo-Reloaded.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o publish
 
-      # Der Editor wird nicht verteilt; er wird nur mitgebaut, damit ein Release nie einen Stand
-      # traegt, mit dem der Editor nicht mehr kompiliert.
-      - name: Editor bauen (nur Pruefung)
-        run: dotnet build editor/BGInfo-Reloaded-Editor.csproj -c Release
+      # Der Editor haengt als weiteres Asset am Release: so kann er sich aus dem Editor heraus ueber
+      # GitHub aktualisieren (GitHubUpdater holt ihn nur, wo er schon neben der exe liegt). Zugleich
+      # traegt ein Release damit nie einen Stand, mit dem der Editor nicht mehr kompiliert. Der
+      # Dateiname muss exakt "BGInfo-Reloaded-Editor.exe" bleiben (FolderUpdater.EditorExe).
+      - name: BGInfo-Reloaded-Editor.exe bauen
+        run: dotnet publish editor/BGInfo-Reloaded-Editor.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o publish
 
       # Zweites Asset: die Beispielkonfiguration, von der gerade gebauten exe neu geschrieben. Damit
       # enthaelt sie immer alle Optionen dieser Version (auch solche, die in der Datei im Repository
@@ -69,4 +71,4 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create $env:GITHUB_REF_NAME publish/BGInfo-Reloaded.exe publish/BGInfo-Reloaded.sample.json --title "BGInfo-Reloaded $env:GITHUB_REF_NAME" --generate-notes
+        run: gh release create $env:GITHUB_REF_NAME publish/BGInfo-Reloaded.exe publish/BGInfo-Reloaded-Editor.exe publish/BGInfo-Reloaded.sample.json --title "BGInfo-Reloaded $env:GITHUB_REF_NAME" --generate-notes

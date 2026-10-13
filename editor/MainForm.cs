@@ -1309,12 +1309,23 @@ public sealed class MainForm : Form
         Row(table, "", Hint("Standard: nur BGInfo-Reloaded.exe und – wo vorhanden – BGInfo-Reloaded-Editor.exe.\r\nDie genauen Dateien zeigt jedes Kästchen, wenn die Maus darauf zeigt.\r\nOhne „Bei jedem Lauf prüfen“ geschieht alles nur mit BGInfo-Reloaded.exe --update.\r\nWer in den Ordner schreiben darf, bestimmt Programm und Konfiguration auf den Rechnern –\r\nSchreibrechte dort entsprechend einschränken."));
 
         Heading(table, "Selbst-Update aus GitHub-Releases");
-        var updateRepo = TextField(() => _config.Update.Repo ?? "", v => _config.Update.Repo = string.IsNullOrWhiteSpace(v) ? null : v.Trim());
+        // Leer wird als "" gespeichert, nicht weggelassen - sonst kaeme beim Laden die Vorgabe zurueck.
+        var updateRepo = TextField(() => _config.Update.Repo ?? "", v => _config.Update.Repo = v.Trim());
         updateRepo.Width = 420;
-        updateRepo.PlaceholderText = "owner/name, z. B. Kilowatt-W/bginfo-reloaded   (leer = keins)";
-        _tips.SetToolTip(updateRepo, $"Aus dem neuesten Release wird nur {FolderUpdater.MainExe} geholt.\r\nEntspricht --update --repo owner/name, nur zentral über die Konfiguration verteilbar.");
-        Row(table, "GitHub-Repository", updateRepo);
-        Row(table, "", Hint("Wird nur mit BGInfo-Reloaded.exe --update benutzt, nie automatisch,\r\nund nur wenn oben kein Ordner eingetragen ist. Geholt wird ausschließlich BGInfo-Reloaded.exe.\r\nEin privates Repository ist ohne Anmeldung nicht erreichbar."));
+        updateRepo.PlaceholderText = $"{UpdateConfig.DefaultRepo}   (leer = kein Update aus GitHub)";
+        _tips.SetToolTip(updateRepo, $"Adresse des Repositorys (https://github.com/owner/name) oder kurz owner/name.\r\nAus dem neuesten Release werden {FolderUpdater.MainExe} und – wo er schon neben der exe liegt – {FolderUpdater.EditorExe} geholt.\r\nEntspricht --update --repo …, nur zentral über die Konfiguration verteilbar.");
+        var syncRepo = new Button { Text = "\uE895", Font = SyncIconFont(), AutoSize = true, Margin = new Padding(6, 0, 0, 0) };
+        _tips.SetToolTip(syncRepo, "Jetzt aus GitHub aktualisieren: das neueste Release dieses Repositorys prüfen und,\r\nwenn es neuer ist, das Programm (und den Editor) holen. Danach bietet die Meldung den Neustart an.");
+        syncRepo.Click += (_, _) => UpdateFromGitHub(updateRepo.Text);
+        var defaultRepo = new Button { Text = "Vorgabe", AutoSize = true, Margin = new Padding(6, 0, 0, 0) };
+        _tips.SetToolTip(defaultRepo, $"Das Repository dieses Programms eintragen:\r\n{UpdateConfig.DefaultRepo}");
+        defaultRepo.Click += (_, _) => updateRepo.Text = UpdateConfig.DefaultRepo;
+        var repoRow = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
+        repoRow.Controls.Add(updateRepo);
+        repoRow.Controls.Add(syncRepo);
+        repoRow.Controls.Add(defaultRepo);
+        Row(table, "GitHub-Repository", repoRow);
+        Row(table, "", Hint("Wird nur auf Aufruf benutzt – mit dem Knopf daneben, mit „Aktualisieren“ in der Leiste (wenn oben kein Ordner\r\neingetragen ist) oder mit BGInfo-Reloaded.exe --update – nie automatisch. Ein privates Repository ist ohne Anmeldung nicht erreichbar."));
 
         Heading(table, "Werkzeuge");
         Row(table, "", Action("Vorschau als Bilddatei speichern…", () =>
@@ -2647,6 +2658,99 @@ public sealed class MainForm : Form
     /// </summary>
     private void CheckUpdateFolderAtStart() => CheckUpdateFolder(manual: false);
 
+    /// <summary>Schrift fuer das Sync-Symbol (Symbolschrift von Windows); fehlt sie, zeigt der Knopf ein Ersatzzeichen.</summary>
+    private Font SyncIconFont()
+    {
+        using var installed = new InstalledFontCollection();
+        var family = new[] { "Segoe Fluent Icons", "Segoe MDL2 Assets" }
+            .Select(name => installed.Families.FirstOrDefault(f => f.Name == name))
+            .FirstOrDefault(f => f != null);
+        return family != null ? new Font(family, Font.Size + 1) : Font;
+    }
+
+    /// <summary>
+    /// Update aus den GitHub-Releases, ausgeloest im Editor: ruft BGInfo-Reloaded.exe --update --repo …
+    /// auf, zeigt deren Ausgabe und bietet den Neustart an, wenn dabei der Editor ersetzt wurde.
+    /// </summary>
+    private async void UpdateFromGitHub(string? repo)
+    {
+        repo = (repo ?? "").Trim();
+        if (repo.Length == 0)
+        {
+            MessageBox.Show(this, $"Es ist kein GitHub-Repository eingetragen.\r\n\r\nVorgabe: {UpdateConfig.DefaultRepo}", AppTitle + " – Update", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        var exe = Path.Combine(Path.GetDirectoryName(Environment.ProcessPath) ?? "", FolderUpdater.MainExe);
+        if (!File.Exists(exe))
+        {
+            MessageBox.Show(this, $"{FolderUpdater.MainExe} wurde nicht neben dem Editor gefunden:\r\n{exe}\r\n\r\nDas Update aus GitHub führt dieses Programm aus.", AppTitle + " – Update", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        _status.Text = $"Prüfe {GitHubUpdater.NormalizeRepo(repo)} auf ein neueres Release…";
+        Cursor = Cursors.WaitCursor;
+        string output;
+        int exitCode;
+        try
+        {
+            var start = new ProcessStartInfo(exe)
+            {
+                UseShellExecute = false, CreateNoWindow = true,
+                RedirectStandardOutput = true, RedirectStandardError = true,
+                StandardOutputEncoding = System.Text.Encoding.UTF8, StandardErrorEncoding = System.Text.Encoding.UTF8
+            };
+            start.ArgumentList.Add("--update");
+            start.ArgumentList.Add("--repo");
+            // Kurzform uebergeben: die versteht auch eine aeltere exe, die volle Adresse erst ab 2.17.0.
+            start.ArgumentList.Add(GitHubUpdater.NormalizeRepo(repo));
+            using var process = Process.Start(start) ?? throw new InvalidOperationException("Prozess konnte nicht gestartet werden.");
+            var standard = process.StandardOutput.ReadToEndAsync();
+            var errors = process.StandardError.ReadToEndAsync();
+            await process.WaitForExitAsync();
+            exitCode = process.ExitCode;
+            output = ((await standard) + (await errors)).Trim();
+        }
+        catch (Exception ex)
+        {
+            Cursor = Cursors.Default;
+            _status.Text = $"Update aus GitHub fehlgeschlagen: {ex.Message}";
+            MessageBox.Show(this, _status.Text, AppTitle + " – Update", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        Cursor = Cursors.Default;
+
+        // Kopfzeilen der exe (Name, Version, Log) weglassen - es zaehlt, was das Update gemeldet hat.
+        var lines = output.Split('\n').Select(line => line.TrimEnd()).Where(line => line.Length > 0
+            && !line.StartsWith("BGInfo-Reloaded ", StringComparison.Ordinal) && !line.StartsWith("Version ", StringComparison.Ordinal)).ToList();
+        var text = $"Repository: {GitHubUpdater.NormalizeRepo(repo)}\r\n\r\n" + (lines.Count > 0 ? string.Join("\r\n", lines) : "(keine Ausgabe)");
+        _status.Text = lines.Count > 0 ? lines[^1] : $"Update aus GitHub beendet (Exit-Code {exitCode}).";
+        RefreshUpdateState();
+
+        // Liegt die bisherige Fassung des Editors als .old daneben, wurde er gerade ersetzt.
+        var editorSwapped = File.Exists(Environment.ProcessPath + ".old");
+        if (exitCode == 0 && editorSwapped)
+        {
+            var restart = new TaskDialogButton("Jetzt neu starten");
+            var later = new TaskDialogButton("Später");
+            var page = new TaskDialogPage
+            {
+                Caption = AppTitle + " – Update",
+                Heading = "Der Editor wurde aktualisiert",
+                Text = text + "\r\n\r\nDie neue Version des Editors ist ab dem nächsten Start aktiv.",
+                Icon = TaskDialogIcon.Information,
+                Buttons = { restart, later },
+                DefaultButton = restart,
+                AllowCancel = true
+            };
+            if (TaskDialog.ShowDialog(this, page) == restart)
+            {
+                RestartEditor();
+            }
+            return;
+        }
+        MessageBox.Show(this, text, AppTitle + " – Update", MessageBoxButtons.OK, exitCode == 0 ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+    }
+
     // Knopf "Aktualisieren": grau, solange nichts Neueres bereitliegt; farbig, sobald es etwas zu holen gibt.
     private ToolStripButton _updateButton = null!;
     private int _updateIconSize;
@@ -2691,7 +2795,7 @@ public sealed class MainForm : Form
         if (_path == null || string.IsNullOrWhiteSpace(_config.Update.Path))
         {
             var repo = _config.Update.Repo;
-            if (!string.IsNullOrWhiteSpace(repo) && _path != null)
+            if (!string.IsNullOrWhiteSpace(repo))
             {
                 Show(true, false, $"Programm jetzt über das GitHub-Repository {repo} aktualisieren (BGInfo-Reloaded.exe --update).\r\nOb dort etwas Neueres liegt, wird nicht vorab geprüft.");
             }
@@ -2760,11 +2864,7 @@ public sealed class MainForm : Form
         }
         if (!string.IsNullOrWhiteSpace(_config.Update.Repo))
         {
-            if ((_dirty || _path == null) && !Save(false))
-            {
-                return;
-            }
-            RunTool($"--update --config \"{_path}\"", $"Update aus {_config.Update.Repo} ausgeführt – Einzelheiten im Log ({RunLog.LogFile}).");
+            UpdateFromGitHub(_config.Update.Repo);
             return;
         }
         MessageBox.Show(this,

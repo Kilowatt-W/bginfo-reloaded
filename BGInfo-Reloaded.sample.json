@@ -87,9 +87,10 @@
     "program": true,      // BGInfo-Reloaded.exe holen, wenn im Ordner eine hoehere Version liegt
     "editor": true,       // BGInfo-Reloaded-Editor.exe ebenso - nur wo der Editor schon neben der exe liegt
     "config": false,      // BGInfo-Reloaded.json holen, wenn im Ordner neuer (vorherige bleibt als .bak)
-    "backgrounds": false  // background*.* und Unterordner backgrounds\ holen (neuere und fehlende Dateien)
-    // Statt eines Ordners ein GitHub-Repository fuer --update (nur auf Aufruf, nur die exe):
-    // , "repo": "Kilowatt-W/bginfo-reloaded"
+    "backgrounds": false, // background*.* und Unterordner backgrounds\ holen (neuere und fehlende Dateien)
+    // GitHub-Repository fuer das Update aus Releases (nur auf Aufruf: --update bzw. Knopf im Editor, wenn
+    // kein Ordner eingetragen ist). Adresse oder kurz owner/name; "" = kein Update aus GitHub.
+    "repo": "https://github.com/Kilowatt-W/bginfo-reloaded"
   },
   // Optional: zentrale Datei (Pfad, UNC oder URL; relativ zum Ordner dieser Datei) mit gemeinsam
   // genutzten "fields" und "items" - siehe BGInfo-Reloaded.central.sample.json. Ihre Zeilen erscheinen

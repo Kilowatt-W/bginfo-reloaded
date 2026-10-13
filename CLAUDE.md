@@ -121,6 +121,10 @@ echtes Windows nötig, das in dieser Entwicklungsumgebung nicht zur Verfügung s
   `backgrounds` (nach Änderungsdatum, `SyncFile`: nur neuere oder fehlende Dateien, nie löschen).
   `update.repo` wird nie automatisch abgefragt (Rate-Limit von GitHub je Anschluss). Die Dateinamen
   stehen als Konstanten in `FolderUpdater`; die Tooltips im Editor benutzen dieselben.
+- **Update aus GitHub**: `update.repo` hat als Vorgabe die Adresse dieses Repositorys
+  (`UpdateConfig.DefaultRepo`); leer muss als `""` gespeichert werden, sonst käme die Vorgabe zurück.
+  Der Editor übergibt der exe die Kurzform (`GitHubUpdater.NormalizeRepo`), weil eine ältere exe die
+  volle Adresse nicht versteht.
 - **`--update` (GitHubUpdater.cs) erwartet ein Release-Asset, das exakt `BGInfo-Reloaded.exe` heißt.**
   Wird der Dateiname im Release-Workflow geändert, muss `AssetName` in `GitHubUpdater.cs`
   mitgezogen werden.
@@ -243,8 +247,9 @@ Getestet wird auf dem Entwicklungsrechner selbst: `.\Build.ps1`, dann
   `NOTICE.md`/`NOTICE.en.md`. Jede inhaltliche Änderung in beiden Sprachen nachziehen. `Übergabe.md`,
   `TODO.md` und diese Datei bleiben deutsch.
 - Ein Release entsteht durch einen Tag `v<Version>`, der zur `<Version>` in
-  `src/BGInfo-Reloaded.csproj` passen muss. Der Workflow hängt zwei Assets an: `BGInfo-Reloaded.exe`
-  und eine `BGInfo-Reloaded.sample.json`, die die frisch gebaute exe aus der Datei im Repository
+  `src/BGInfo-Reloaded.csproj` passen muss. Der Workflow hängt drei Assets an: `BGInfo-Reloaded.exe`,
+  `BGInfo-Reloaded-Editor.exe` (für das Update des Editors aus GitHub – der Name muss so bleiben,
+  `FolderUpdater.EditorExe`) und eine `BGInfo-Reloaded.sample.json`, die die frisch gebaute exe aus der Datei im Repository
   neu schreibt (`--export-config … --with-placeholders`). Alle Optionen kommen dabei aus
   `AppConfig`/`ConfigWriter.Trailing`, alle Platzhalter aus `ValueResolver.BuiltIns`, `DriveTags`
   und `GenericTags` – neue Optionen und Platzhalter dort eintragen, dann stimmt die Beispieldatei

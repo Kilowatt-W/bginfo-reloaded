@@ -696,11 +696,14 @@ public sealed class UpdateConfig
     public bool Backgrounds { get; set; }
 
     /// <summary>
-    /// GitHub-Repository ("owner/name") fuer --update aus Releases - der zentral verteilbare Ersatz
-    /// fuer --repo. Wird nur auf Aufruf von --update benutzt, nie automatisch (GitHub begrenzt
-    /// anonyme Abfragen je Internet-Anschluss).
+    /// GitHub-Repository fuer --update aus Releases - als Adresse (https://github.com/owner/name) oder
+    /// kurz "owner/name". Vorgabe ist das Repository dieses Programms. Wird nur auf Aufruf benutzt
+    /// (--update, Knopf im Editor), nie automatisch (GitHub begrenzt anonyme Abfragen je
+    /// Internet-Anschluss). Leer ("") = kein Update aus GitHub.
     /// </summary>
-    public string? Repo { get; set; }
+    public string? Repo { get; set; } = DefaultRepo;
+
+    public const string DefaultRepo = "https://github.com/Kilowatt-W/bginfo-reloaded";
 }
 
 /// <summary>Was aus einer per "include" eingebundenen Datei uebernommen wird - bewusst nur Felder und Zeilen.</summary>

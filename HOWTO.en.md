@@ -959,16 +959,25 @@ BGInfo-Reloaded.exe --update --check-only
 ```
 
 Compares the tag of the latest release (e.g. `v1.3.0`) with its own version and downloads the
-release asset named exactly `BGInfo-Reloaded.exe`. The new version becomes active on the next start.
+release asset named exactly `BGInfo-Reloaded.exe`. If the editor lies next to the exe and is older
+than the release, `BGInfo-Reloaded-Editor.exe` is fetched too (it is never newly placed anywhere).
+The new version becomes active on the next start.
 
-Instead of `--repo`, the repository can also be entered centrally in the configuration:
+The repository is part of the configuration – as an address or short `owner/name`. The default is
+the repository of this program:
 
 ```jsonc
-"update": { "repo": "Kilowatt-W/bginfo-reloaded" }
+"update": { "repo": "https://github.com/Kilowatt-W/bginfo-reloaded" }   // "" = no update from GitHub
 ```
 
-It is only used when `--update` is called, never automatically (GitHub limits anonymous requests per
-internet connection), and only `BGInfo-Reloaded.exe` is fetched. A repository given with `--repo` is
+**In the editor:** on the tab “Autostart und Werkzeuge” a button with a sync symbol sits next to
+the field “GitHub-Repository”. It checks the latest release immediately, fetches program and editor
+if needed, shows the output and offers a restart if the editor was updated. “Vorgabe” (default)
+enters the address above again. The toolbar button “Aktualisieren” takes the same route if no
+update folder is entered.
+
+It is only used on request, never automatically (GitHub limits anonymous requests per
+internet connection). A repository given with `--repo` is
 still remembered per user in `%LOCALAPPDATA%\BGInfo-Reloaded\update.json`. A private repository
 cannot be reached without signing in.
 

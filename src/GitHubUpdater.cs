@@ -24,6 +24,32 @@ public static class GitHubUpdater
 {
     private const string AssetName = "BGInfo-Reloaded.exe";
 
+    /// <summary>Der Editor haengt als weiteres Asset am Release; geholt wird er nur, wo er schon neben der exe liegt.</summary>
+    private const string EditorAssetName = FolderUpdater.EditorExe;
+
+    /// <summary>
+    /// "https://github.com/owner/name", "github.com/owner/name.git" oder "owner/name" -> "owner/name".
+    /// </summary>
+    public static string NormalizeRepo(string repo)
+    {
+        var text = repo.Trim();
+        foreach (var prefix in new[] { "https://", "http://", "www.", "github.com/" })
+        {
+            if (text.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                text = text[prefix.Length..];
+            }
+        }
+        text = text.Trim('/');
+        if (text.EndsWith(".git", StringComparison.OrdinalIgnoreCase))
+        {
+            text = text[..^4];
+        }
+        // Nur owner/name - was dahinter steht (/releases, /tree/main ...), gehoert nicht dazu.
+        var parts = text.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length >= 2 ? $"{parts[0]}/{parts[1]}" : text;
+    }
+
     public static string ConfigPath => Path.Combine(WallpaperState.StateDirectory, "update.json");
 
     /// <param name="repoArg">Mit --repo angegeben; wird fuer spaetere Aufrufe gemerkt.</param>
@@ -42,6 +68,7 @@ public static class GitHubUpdater
         {
             SaveStoredRepo(repoArg);
         }
+        repo = NormalizeRepo(repo);
 
         Console.WriteLine($"Pruefe GitHub-Repository '{repo}' auf ein neueres Release...");
 
@@ -68,7 +95,38 @@ public static class GitHubUpdater
 
         Console.WriteLine($"Installiert: {CurrentVersion}  |  Verfuegbar: {remoteVersion} ({tagName})");
 
-        if (remoteVersion == null || remoteVersion <= CurrentVersion)
+        string? AssetUrl(string name)
+        {
+            foreach (var asset in root.GetProperty("assets").EnumerateArray())
+            {
+                if (string.Equals(asset.GetProperty("name").GetString(), name, StringComparison.OrdinalIgnoreCase))
+                {
+                    return asset.GetProperty("browser_download_url").GetString();
+                }
+            }
+            return null;
+        }
+
+        // Der Editor wird nur aktualisiert, wo er schon neben der exe liegt - wie beim Update aus einem Ordner.
+        var ownDirectory = Path.GetDirectoryName(Environment.ProcessPath ?? "") ?? "";
+        var editorPath = Path.Combine(ownDirectory, EditorAssetName);
+        Version? editorVersion = null;
+        if (File.Exists(editorPath))
+        {
+            editorVersion = Version.TryParse(System.Diagnostics.FileVersionInfo.GetVersionInfo(editorPath).FileVersion, out var parsed) ? parsed : new Version(0, 0);
+            Console.WriteLine($"{EditorAssetName}: installiert {editorVersion}");
+        }
+
+        var programNewer = remoteVersion != null && remoteVersion > CurrentVersion;
+        var editorNewer = remoteVersion != null && editorVersion != null && remoteVersion > editorVersion;
+        var editorUrl = editorNewer ? AssetUrl(EditorAssetName) : null;
+        if (editorNewer && editorUrl == null)
+        {
+            Console.WriteLine($"Hinweis: Release {tagName} enthaelt keine {EditorAssetName} - der Editor bleibt, wie er ist.");
+            editorNewer = false;
+        }
+
+        if (!programNewer && !editorNewer)
         {
             Console.WriteLine("Bereits aktuell - kein Update noetig.");
             return;
@@ -80,31 +138,38 @@ public static class GitHubUpdater
             return;
         }
 
-        string? downloadUrl = null;
-        foreach (var asset in root.GetProperty("assets").EnumerateArray())
+        if (programNewer)
         {
-            if (string.Equals(asset.GetProperty("name").GetString(), AssetName, StringComparison.OrdinalIgnoreCase))
-            {
-                downloadUrl = asset.GetProperty("browser_download_url").GetString();
-                break;
-            }
-        }
-
-        if (downloadUrl == null)
-        {
-            throw new InvalidOperationException(
+            var downloadUrl = AssetUrl(AssetName) ?? throw new InvalidOperationException(
                 $"Release {tagName} hat kein Asset namens '{AssetName}'. Beim Release-Erstellen die per " +
                 "dotnet publish erzeugte exe unter genau diesem Namen anhaengen.");
+
+            Console.WriteLine($"Lade {AssetName} {tagName} herunter...");
+            var tempFile = Path.Combine(Path.GetTempPath(), $"BGInfo-Reloaded_{tagName}.exe");
+            var bytes = await http.GetByteArrayAsync(downloadUrl);
+            await File.WriteAllBytesAsync(tempFile, bytes);
+
+            ExecutableSwap.ReplaceRunningExecutable(tempFile);
+            Console.WriteLine($"{AssetName} auf {tagName} aktualisiert. Wird beim naechsten Start dieser exe aktiv.");
         }
 
-        Console.WriteLine($"Lade {tagName} herunter...");
-        var tempFile = Path.Combine(Path.GetTempPath(), $"BGInfo-Reloaded_{tagName}.exe");
-        var bytes = await http.GetByteArrayAsync(downloadUrl);
-        await File.WriteAllBytesAsync(tempFile, bytes);
-
-        ExecutableSwap.ReplaceRunningExecutable(tempFile);
-
-        Console.WriteLine($"Update auf {tagName} installiert. Wird beim naechsten Start dieser exe aktiv.");
+        if (editorNewer)
+        {
+            Console.WriteLine($"Lade {EditorAssetName} {tagName} herunter...");
+            var staged = editorPath + ".new";
+            try
+            {
+                var bytes = await http.GetByteArrayAsync(editorUrl);
+                await File.WriteAllBytesAsync(staged, bytes);
+                // Umbenennen statt ueberschreiben: der Editor laeuft meist gerade (er hat das Update ausgeloest).
+                ExecutableSwap.Replace(editorPath, staged);
+                Console.WriteLine($"{EditorAssetName} auf {tagName} aktualisiert. Wird beim naechsten Start des Editors aktiv.");
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or HttpRequestException)
+            {
+                Console.WriteLine($"Warnung: {EditorAssetName} konnte nicht aktualisiert werden ({ex.Message}).");
+            }
+        }
     }
 
     private static Version? ParseVersion(string tagName)

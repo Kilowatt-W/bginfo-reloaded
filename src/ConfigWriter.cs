@@ -80,7 +80,7 @@ internal static class ConfigWriter
         ["update.editor"] = "BGInfo-Reloaded-Editor.exe mit aktualisieren - nur wo der Editor schon neben der exe liegt",
         ["update.config"] = "BGInfo-Reloaded.json aus dem Ordner neben die exe holen, wenn dort neuer (vorherige bleibt als .bak)",
         ["update.backgrounds"] = "background*.* und den Unterordner backgrounds\\ aus dem Ordner holen (neuere und fehlende Dateien)",
-        ["update.repo"] = "GitHub-Repository (owner/name) für --update aus Releases; nur auf Aufruf, nie automatisch"
+        ["update.repo"] = "GitHub-Repository für das Update aus Releases (Adresse oder owner/name), nur auf Aufruf; \"\" = keins",
     };
 
     /// <summary>Kommentarzeilen vor einem Abschnitt der obersten Ebene.</summary>
@@ -108,6 +108,7 @@ internal static class ConfigWriter
     /// </summary>
     private static readonly string[] FormerComments =
     {
+        "GitHub-Repository (owner/name) für --update aus Releases; nur auf Aufruf, nie automatisch",
         "  BGInfo-Reloaded.exe --config \\\\server\\share\\BGInfo-Reloaded.json   (bzw. https://...)",
         "Whitelist: wenn nicht leer, Panel nur auf passenden Rechnern (* und ? erlaubt)",
         "Blacklist: auf passenden Rechnern kein Panel - hat Vorrang",

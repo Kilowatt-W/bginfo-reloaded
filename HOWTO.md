@@ -953,16 +953,25 @@ BGInfo-Reloaded.exe --update --check-only
 ```
 
 Vergleicht den Tag des neuesten Releases (z. B. `v1.3.0`) mit der eigenen Version und lädt das
-Release-Asset, das exakt `BGInfo-Reloaded.exe` heißt. Aktiv wird die neue Version beim nächsten Start.
+Release-Asset, das exakt `BGInfo-Reloaded.exe` heißt. Liegt der Editor neben der exe und ist er
+älter als das Release, wird auch `BGInfo-Reloaded-Editor.exe` geholt (nirgends neu hingelegt).
+Aktiv wird die neue Version beim nächsten Start.
 
-Das Repository lässt sich statt per `--repo` auch zentral in der Konfiguration eintragen:
+Das Repository steht in der Konfiguration – als Adresse oder kurz `owner/name`. Vorgabe ist das
+Repository dieses Programms:
 
 ```jsonc
-"update": { "repo": "Kilowatt-W/bginfo-reloaded" }
+"update": { "repo": "https://github.com/Kilowatt-W/bginfo-reloaded" }   // "" = kein Update aus GitHub
 ```
 
-Es wird nur auf Aufruf von `--update` benutzt, nie automatisch (GitHub begrenzt anonyme Abfragen je
-Internet-Anschluss), und geholt wird ausschließlich `BGInfo-Reloaded.exe`. Ein mit `--repo`
+**Im Editor:** im Reiter „Autostart und Werkzeuge“ steht neben dem Feld „GitHub-Repository“ ein
+Knopf mit Sync-Symbol. Er prüft das neueste Release sofort, holt bei Bedarf Programm und Editor,
+zeigt die Ausgabe und bietet bei aktualisiertem Editor den Neustart an. „Vorgabe“ trägt die
+Adresse oben wieder ein. Der Knopf „Aktualisieren“ in der Leiste nimmt denselben Weg, wenn kein
+Update-Ordner eingetragen ist.
+
+Es wird nur auf Aufruf benutzt, nie automatisch (GitHub begrenzt anonyme Abfragen je
+Internet-Anschluss). Ein mit `--repo`
 angegebenes Repository merkt sich das Programm weiterhin je Benutzer in
 `%LOCALAPPDATA%\BGInfo-Reloaded\update.json`. Ein privates Repository ist ohne Anmeldung nicht
 erreichbar.
