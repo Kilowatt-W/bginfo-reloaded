@@ -28,12 +28,21 @@ public static class WallpaperRenderer
     {
         var panel = config.Panel;
         var fallbackBackground = ParseColor(config.Wallpaper.BackgroundColor, "wallpaper.backgroundColor");
-        var panelColor = ParseColor(panel.Background, "panel.background");
-        var headerColor = ParseColor(config.Colors.Header, "colors.header");
-        var labelColor = ParseColor(config.Colors.Label, "colors.label");
-        var valueColor = ParseColor(config.Colors.Value, "colors.value");
-        var barUsedColor = ParseColor(config.Colors.BarUsed, "colors.barUsed");
-        var barFreeColor = ParseColor(config.Colors.BarFree, "colors.barFree");
+        // Gesamt-Deckkraft: wirkt auf alles, was zum Panel gehoert - nicht auf den Hintergrund des Bildes.
+        var opacity = Math.Clamp(panel.Opacity, 0, 100) / 100.0;
+        Color PanelColor(string hex, string name)
+        {
+            var color = ParseColor(hex, name);
+            return Color.FromArgb((int)Math.Round(color.A * opacity), color);
+        }
+        var panelColor = PanelColor(panel.Background, "panel.background");
+        var headerColor = PanelColor(config.Colors.Header, "colors.header");
+        var labelColor = PanelColor(config.Colors.Label, "colors.label");
+        var valueColor = PanelColor(config.Colors.Value, "colors.value");
+        var barUsedColor = PanelColor(config.Colors.BarUsed, "colors.barUsed");
+        var barFreeColor = PanelColor(config.Colors.BarFree, "colors.barFree");
+        var shadowColor = PanelColor(panel.ShadowColor, "panel.shadowColor");
+        var borderColor = PanelColor(config.Border.Color, "border.color");
 
         var toScreen = config.Wallpaper.Fit != WallpaperFit.None;
         using Bitmap image = toScreen
@@ -231,7 +240,7 @@ public static class WallpaperRenderer
                 if (shadowSize > 0)
                 {
                     DrawShadow(graphics, panelPath, panelX, panelY, panelWidth, panelHeight, radius, shadowSize,
-                        ParseColor(panel.ShadowColor, "panel.shadowColor"));
+                        shadowColor);
                 }
 
                 using var panelBrush = new SolidBrush(panelColor);
@@ -287,7 +296,7 @@ public static class WallpaperRenderer
                 y += height;
             }
 
-            DrawBorders(graphics, config.Border, drawnRows, new Rectangle(panelX, panelY, panelWidth, panelHeight), radius,
+            DrawBorders(graphics, config.Border, borderColor, drawnRows, new Rectangle(panelX, panelY, panelWidth, panelHeight), radius,
                 padding, labelColumnWidth, Math.Min(layout.Gap, Scaled(8)), layout.ValueLineHeight, layout.Scale);
 
             Save(image, outputImagePath);
@@ -334,7 +343,7 @@ public static class WallpaperRenderer
     /// Zeilen) oder als Gitter um jede Zeile. Die Linien liegen im vorhandenen Innenabstand und
     /// Zeilenabstand - Groesse und Lage des Panels aendern sich durch den Rahmen nicht.
     /// </summary>
-    private static void DrawBorders(Graphics graphics, BorderConfig border, List<(InfoLine Line, int Top, int Height)> rows, Rectangle panel,
+    private static void DrawBorders(Graphics graphics, BorderConfig border, Color color, List<(InfoLine Line, int Top, int Height)> rows, Rectangle panel,
         int radius, int padding, int labelColumnWidth, int labelGap, int valueLineHeight, float scale)
     {
         if (border.Width <= 0)
@@ -343,7 +352,7 @@ public static class WallpaperRenderer
         }
 
         var width = Math.Max(1, (int)Math.Round(border.Width * scale));
-        using var pen = new Pen(ParseColor(border.Color, "border.color"), width)
+        using var pen = new Pen(color, width)
         {
             DashStyle = border.Style switch
             {

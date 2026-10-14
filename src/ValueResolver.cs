@@ -235,9 +235,10 @@ public sealed class ValueResolver
                 case "env": return Environment.GetEnvironmentVariable(argument) ?? "";
                 case "reg": return ReadRegistry(argument);
                 case "wmi": return ReadWmiExpression(argument);
-                case "file": return ReadFirstLine(argument);
-                case "filever": return System.Diagnostics.FileVersionInfo.GetVersionInfo(Environment.ExpandEnvironmentVariables(argument)).FileVersion ?? NotAvailable;
-                case "filetime": return ReadFileTime(argument);
+                // Pfade duerfen in Anfuehrungszeichen stehen ({file:"C:\Mit Leerzeichen\x.txt"}).
+                case "file": return ReadFirstLine(Unquote(argument));
+                case "filever": return System.Diagnostics.FileVersionInfo.GetVersionInfo(Environment.ExpandEnvironmentVariables(Unquote(argument))).FileVersion ?? NotAvailable;
+                case "filetime": return ReadFileTime(Unquote(argument));
                 case "now": return ValueFormat.FormatWith(DateTime.Now, argument);
                 case "uptime": return FormatUptime(TimeSpan.FromMilliseconds(Environment.TickCount64), argument);
                 default: return null;
@@ -738,6 +739,15 @@ public sealed class ValueResolver
     {
         path = Environment.ExpandEnvironmentVariables(path);
         return File.Exists(path) ? ValueFormat.FormatDateTime(File.GetLastWriteTime(path)) : NotAvailable;
+    }
+
+    /// <summary>Einfache oder doppelte Anfuehrungszeichen um einen Pfad entfernen.</summary>
+    private static string Unquote(string text)
+    {
+        var trimmed = text.Trim();
+        return trimmed.Length >= 2 && (trimmed[0] == '"' && trimmed[^1] == '"' || trimmed[0] == '\'' && trimmed[^1] == '\'')
+            ? trimmed[1..^1].Trim()
+            : trimmed;
     }
 
     private static string ReadFirstLine(string path)

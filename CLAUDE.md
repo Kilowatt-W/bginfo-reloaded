@@ -218,6 +218,14 @@ echtes Windows nötig, das in dieser Entwicklungsumgebung nicht zur Verfügung s
   (`ResolveHostFiles`) selbst auf, der Editor nur auf der Vorschau-Kopie. Der Cache je Listendatei
   trägt eine Kennung der Quelle im Namen, damit nie der Inhalt einer anderen Datei als Ersatz dient.
   Listen immer über `HostsConfig.Normalize` bereinigen (Doppelte, Leerzeilen).
+- **Eigene Felder (`FieldMap`)**: `AppConfig.Fields` ist ein `Dictionary<string,string>` mit
+  zusätzlichen `Labels`; `FieldMapConverter` liest die Kurzform `"name": "{…}"` und die Form
+  `"name": { "value": …, "label": … }` und schreibt die Objektform nur, wenn eine Bezeichnung da ist.
+  Wer Felder neu zusammenstellt, nimmt `new FieldMap()` und überträgt die Labels.
+- **Editor-Teiler (`SplitContainer`)**: `Panel1MinSize`/`Panel2MinSize` nie im Initialisierer setzen –
+  vor dem ersten Layout ist der Container winzig, Windows Forms wirft dann beim Start (`SetMinSizes`
+  im Load-Handler). Teilerstellungen und Vorschau-Schalter merkt sich der Editor in
+  `%LOCALAPPDATA%\BGInfo-Reloaded\editor-layout.txt`.
 - Eingebaute Platzhalter stehen nur in `ValueResolver.BuiltIns`; `--list-tags` (`TagList.cs`) liest
   dieselbe Liste.
 - **Eigene Felder und zentrale Datei**: `fields` (benannte Platzhalter) gehen über den Konstruktor in

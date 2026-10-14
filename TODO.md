@@ -247,6 +247,10 @@ WMI-Dialog, Anzeige von Blöcken und Filtern. Noch von Hand durchzuklicken:
       als Standardbild; der Editor sagt bei der Auswahl, welche Datei als Standard gilt
 - [x] 2026-10-13 Version 2.16.0: Balken für Prozentwerte (`bar` je Zeile, `colors.barUsed`/`barFree`,
       `panel.barHeight`) – Laufwerke, RAM, Akku; mit Text darunter, ohne Text statt des Werts (drei Fälle gerendert)
+- [x] 2026-10-14 Version 2.18.0: Editor – Teiler zwischen Zeilen und Platzhaltern, Vorschaubilder passen sich an
+      (Teiler, Ausblenden, Doppelklick Originalgröße), Zahlenfelder wirken beim Tippen, „Datei wählen…“ für
+      Pfad-Platzhalter, Feldbezeichnungen und Kopieren/Einfügen von Feldern; `panel.opacity`; Pfade in
+      Anführungszeichen bei `file`/`filever`/`filetime`
 - [x] 2026-10-13 Version 2.17.0: Update aus GitHub im Editor (Sync-Knopf neben dem Repository-Feld), Adresse des
       Repositorys als Vorgabe, volle Adresse wird verstanden, Editor als drittes Release-Asset (exe: aktuell und
       alter Stand 2.0.0 gegen v2.16.2 geprüft; Editor-Update erst nach dem ersten Release mit Editor-Asset prüfbar)

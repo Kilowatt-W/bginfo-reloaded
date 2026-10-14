@@ -52,6 +52,7 @@ internal static class ConfigWriter
         ["colors.barUsed"] = "Balken (\"bar\" einer Zeile): belegter Teil",
         ["colors.barFree"] = "Balken: freier Teil",
         ["panel.barHeight"] = "Höhe der Balken in Pixeln",
+        ["panel.opacity"] = "Gesamt-Deckkraft in Prozent (0 bis 100), verrechnet mit allen eingestellten Deckkräften",
         ["wallpaper.path"] = "festes Hintergrundbild; relativ zum Ordner dieser Datei; weglassen = Wallpaper des Benutzers",
         ["wallpaper.originalPath"] = "nur zur Information: von hier wurde das Bild beim ersten Start übernommen",
         ["wallpaper.byResolution"] = "eigene Zuordnung je Auflösung, z. B. {\"3440x1440\": \".\\\\backgrounds\\\\breit.jpg\"} - hat Vorrang vor bild_3440x1440.jpg",

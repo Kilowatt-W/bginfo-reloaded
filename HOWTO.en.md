@@ -89,8 +89,17 @@ The tabs and buttons (German labels in parentheses):
   every monitor. If they change while the editor is open, display and preview are updated.
 - **Status bar:** messages on the left; on the right the name of the loaded file (full path when
   the mouse points at it) and the program version.
-- **Preview (Vorschau):** the whole screen at the top right, below it the panel in original size.
-  Rendering uses the same code as `BGInfo-Reloaded.exe`, for the primary monitor of this machine.
+- **Preview (Vorschau):** the whole screen at the top right, below it the info panel. Rendering uses
+  the same code as `BGInfo-Reloaded.exe`, for the primary monitor of this machine. Both images fill
+  the available space; a movable splitter (grey bar) lies between them. A check box at the right of
+  each image's heading (“Bildschirm”, “Info-Panel”) hides it; the other image then gets the whole
+  area, and the check box moves there so the hidden one can be shown again. A double-click on the info panel switches between fitted and original
+  size. Changes in number fields take effect while typing; the preview follows about a second after
+  the last input.
+- **Splitters:** between settings and preview, and on the tab “Inhalt” between lines and
+  placeholders. The editor remembers their positions per user.
+- **Choose file (Datei wählen…, tab “Inhalt”):** below the placeholder list; builds `{file:…}`,
+  `{filever:…}` or `{filetime:…}` from a file chosen in the explorer and inserts it at the caret.
 - **Using placeholders (tab “Inhalt”):** a double-click on a placeholder inserts into the selected
   line, depending on where the caret is: in “Value” the placeholder (and, if the label is still
   empty, its meaning as the label), in “Bezeichnung” (label) the meaning (and, if “Value” is still
@@ -358,6 +367,13 @@ With a relative width (`screenFraction`) nothing is ever wrapped – there the c
 scaled to fit. `screenFraction` also takes precedence over `width`: if both are set, the relative
 width applies and the panel follows the content again. If a fixed width is not enough for both
 columns, the automatically sized label column gets at most 45 % of it.
+
+### Overall opacity (`panel.opacity`)
+
+`"panel": { "opacity": 70 }` makes the whole panel more transparent: the value in percent (0 to
+100, default 100) is combined with all configured opacities – panel background, shadow, texts,
+bars, border. At 50 % everything is half as opaque as configured. In the editor: tab “Aussehen”,
+slider with number field “Gesamt-Deckkraft”.
 
 ### Border (`border`)
 
@@ -696,7 +712,7 @@ environment variables in plain text – do not pass it on unchecked if credentia
 | `{wmi:SELECT … FROM …}` | `{wmi:SELECT Caption FROM Win32_OperatingSystem}` – a whole WQL query as in the WMI Query field of BGInfo; the first property with a value counts |
 | `{filever:path}` | `{filever:%WINDIR%\\explorer.exe}` – file version |
 | `{filetime:path}` | `{filetime:%ProgramData%\\Company\\asset.txt}` – modification date of the file |
-| `{file:path}` | `{file:%ProgramData%\\Company\\asset.txt}` – first non-empty line of the file |
+| `{file:path}` | `{file:%ProgramData%\\Company\\asset.txt}` – first non-empty line of the file; a path with spaces may be put in quotes (`{file:"C:\\With spaces\\x.txt"}`), also for `filever` and `filetime` |
 | `{now:format}` | `{now:dd.MM.yyyy HH:mm}` |
 
 **Truncating** – works with every placeholder, including custom fields:
@@ -737,6 +753,13 @@ counterpart to the "Custom" fields of BGInfo:
 - Custom fields take precedence over built-in names. Within its own definition the same name refers
   to the built-in value again: `"ipv4": "{ipv4} / {subnet}"` extends `{ipv4}`.
 - `BGInfo-Reloaded.exe --list-tags [--config file]` shows the custom fields with their values.
+- **Label:** a field can carry a label – in the editor it appears as “Bedeutung” (meaning) in the
+  placeholder list and becomes the label of a line created by double-click or drag. The field is
+  then stored like this (the short form without a label remains valid):
+  `"model": { "value": "{wmi:SELECT Model FROM Win32_ComputerSystem}", "label": "Model" }`
+- **Copying:** on the tab “Datei und Felder”, Ctrl+C copies the selected fields (name, value,
+  label) as text; Ctrl+V pastes them into the field table of another editor window. If a field
+  exists already, the editor asks whether to replace or skip it.
 
 ### Including a central file (`include`)
 

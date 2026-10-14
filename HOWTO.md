@@ -80,8 +80,18 @@ BGInfo-Reloaded-Editor.exe BGInfo-Reloaded.json      eine vorhandene Datei öffn
   für jeden Monitor. Ändern sie sich bei geöffnetem Editor, werden Anzeige und Vorschau aktualisiert.
 - **Fußzeile:** links Meldungen, rechts der Name der geladenen Datei (voller Pfad beim Zeigen mit
   der Maus) und die Programmversion.
-- **Vorschau:** rechts oben der ganze Bildschirm, darunter das Panel in Originalgröße. Gerendert
-  wird mit demselben Code wie in `BGInfo-Reloaded.exe`, für den primären Monitor dieses Rechners.
+- **Vorschau:** rechts oben der ganze Bildschirm, darunter das Info-Panel. Gerendert wird mit
+  demselben Code wie in `BGInfo-Reloaded.exe`, für den primären Monitor dieses Rechners. Beide
+  Bilder füllen den verfügbaren Platz; dazwischen liegt ein verschiebbarer Teiler (grauer Balken).
+  Rechts in der Überschrift jedes Bilds blendet ein Kästchen („Bildschirm“, „Info-Panel“) es aus;
+  das andere Bild bekommt dann die ganze Fläche, und das Kästchen steht dort zum Wiedereinblenden. Ein Doppelklick auf das
+  Info-Panel wechselt zwischen eingepasst und Originalgröße. Änderungen in Zahlenfeldern wirken
+  schon beim Tippen; die Vorschau folgt knapp eine Sekunde nach der letzten Eingabe.
+- **Teiler:** zwischen Einstellungen und Vorschau sowie im Reiter „Inhalt“ zwischen Zeilen und
+  Platzhaltern. Die Stellungen merkt sich der Editor je Benutzer.
+- **Datei wählen… (Reiter „Inhalt“):** unter der Platzhalterliste; stellt `{file:…}`,
+  `{filever:…}` oder `{filetime:…}` aus einer im Explorer gewählten Datei zusammen und fügt den
+  Platzhalter an der Schreibmarke ein.
 - **Platzhalter übernehmen (Reiter „Inhalt“):** Doppelklick auf einen Platzhalter fügt in die
   markierte Zeile ein, je nachdem, wo die Schreibmarke steht: in „Value“ den Platzhalter (und, wenn
   die Bezeichnung noch leer ist, dessen Bedeutung als Bezeichnung), in „Bezeichnung“ die Bedeutung
@@ -344,6 +354,13 @@ Bei relativer Breite (`screenFraction`) wird nie umbrochen – dort ist der Inha
 skaliert, dass er passt. `screenFraction` hat außerdem Vorrang vor `width`: ist beides gesetzt, gilt
 die relative Breite, und das Panel richtet sich wieder nach dem Inhalt. Reicht eine feste Breite
 nicht für beide Spalten, bekommt die automatisch bemessene Bezeichnungsspalte höchstens 45 % davon.
+
+### Gesamt-Deckkraft (`panel.opacity`)
+
+`"panel": { "opacity": 70 }` macht das ganze Panel durchsichtiger: der Wert in Prozent (0 bis 100,
+Standard 100) verrechnet sich mit allen eingestellten Deckkräften – Hintergrund des Panels,
+Schatten, Texte, Balken, Rahmen. Bei 50 % ist alles halb so deckend wie eingestellt. Im Editor:
+Reiter „Aussehen“, Schieberegler mit Zahlenfeld „Gesamt-Deckkraft“.
 
 ### Rahmen (`border`)
 
@@ -687,7 +704,7 @@ stehen.
 | `{wmi:SELECT … FROM …}` | `{wmi:SELECT Caption FROM Win32_OperatingSystem}` – ganze WQL-Abfrage wie im Feld WMI Query von BGInfo; es zählt die erste Eigenschaft mit Wert |
 | `{filever:Pfad}` | `{filever:%WINDIR%\\explorer.exe}` – Dateiversion |
 | `{filetime:Pfad}` | `{filetime:%ProgramData%\\Firma\\asset.txt}` – Änderungsdatum der Datei |
-| `{file:Pfad}` | `{file:%ProgramData%\\Firma\\asset.txt}` – erste nicht-leere Zeile der Datei |
+| `{file:Pfad}` | `{file:%ProgramData%\\Firma\\asset.txt}` – erste nicht-leere Zeile der Datei; ein Pfad mit Leerzeichen darf in Anführungszeichen stehen (`{file:"C:\\Mit Leerzeichen\\x.txt"}`), gilt auch für `filever` und `filetime` |
 | `{now:Format}` | `{now:dd.MM.yyyy HH:mm}` |
 
 **Kürzen** – funktioniert mit jedem Platzhalter, auch mit eigenen Feldern:
@@ -728,6 +745,13 @@ sie mehrfach benutzt werden, bekommt sie unter `fields` einen Namen und ist dann
 - Eigene Felder haben Vorrang vor eingebauten Namen. Innerhalb der eigenen Definition meint
   derselbe Name wieder den eingebauten Wert: `"ipv4": "{ipv4} / {subnet}"` erweitert `{ipv4}`.
 - `BGInfo-Reloaded.exe --list-tags [--config datei]` zeigt die eigenen Felder mit ihren Werten.
+- **Bezeichnung:** ein Feld kann eine Bezeichnung tragen – sie erscheint im Editor als „Bedeutung“
+  in der Platzhalterliste und wird zur Bezeichnung einer Zeile, die per Doppelklick oder Ziehen
+  entsteht. Dann steht das Feld so in der Datei (die Kurzform ohne Bezeichnung bleibt gültig):
+  `"modell": { "value": "{wmi:SELECT Model FROM Win32_ComputerSystem}", "label": "Modell" }`
+- **Kopieren:** im Reiter „Datei und Felder“ kopiert Strg+C die markierten Felder (Name, Value,
+  Bezeichnung) als Text; Strg+V fügt sie in der Feldtabelle eines anderen Editorfensters ein.
+  Gibt es ein Feld schon, fragt der Editor, ob ersetzt oder übersprungen werden soll.
 
 ### Zentrale Datei einbinden (`include`)
 

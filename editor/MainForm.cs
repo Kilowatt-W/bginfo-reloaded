@@ -38,7 +38,7 @@ public sealed class MainForm : Form
 
     // Jedes gebundene Eingabefeld traegt hier ein, wie es seinen Wert aus _config nachlaedt.
     private readonly List<Action> _loaders = new();
-    private readonly System.Windows.Forms.Timer _previewTimer = new() { Interval = 500 };
+    private readonly System.Windows.Forms.Timer _previewTimer = new() { Interval = 800 };
 
     private readonly ListBox _items = new() { Dock = DockStyle.Fill, IntegralHeight = false };
     private readonly Label _labelCaption = new() { AutoSize = true, Anchor = AnchorStyles.Left };
@@ -73,6 +73,12 @@ public sealed class MainForm : Form
     private readonly CheckBox _taskWatch = new() { AutoSize = true, Text = "Zusätzlich auf Wechsel von Auflösung und Skalierung reagieren (--watch)" };
     private readonly CheckBox _taskUseConfig = new() { AutoSize = true, Checked = true, Text = "Die geöffnete Konfigurationsdatei im Task verwenden (--config)" };
     private readonly SplitContainer _split = new() { Dock = DockStyle.Fill };
+    // Reiter "Inhalt": Zeilen links, Platzhalter rechts.
+    private readonly SplitContainer _itemsSplit = new() { Dock = DockStyle.Fill };
+    // Vorschau: oben der ganze Bildschirm, unten das Info-Panel.
+    private readonly SplitContainer _previewSplit = new() { Dock = DockStyle.Fill, Orientation = Orientation.Horizontal };
+    // Unteres Bild: eingepasst (Standard) oder - per Doppelklick - in Originalgroesse.
+    private bool _detailOriginalSize;
     private readonly ToolTip _tips = new() { AutoPopDelay = 30000, InitialDelay = 300, ReshowDelay = 100 };
     private readonly Label _previewCaption = new() { AutoSize = true, Margin = new Padding(3, 3, 3, 4) };
     // Eigene Zeile links unten ueber der Fusszeile, in Orange: dieser Rechner ist laut White-/Blacklist
@@ -123,19 +129,83 @@ public sealed class MainForm : Form
 
         // Rechts oben der ganze Bildschirm, darunter das Panel in Originalgroesse - auf breiten oder
         // hochaufloesenden Monitoren waere es in der Gesamtansicht sonst nicht lesbar.
-        var previews = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4, Padding = new Padding(6) };
-        previews.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        previews.RowStyles.Add(new RowStyle(SizeType.Percent, 45));
-        previews.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        previews.RowStyles.Add(new RowStyle(SizeType.Percent, 55));
-        previews.Controls.Add(_previewCaption);
+        // Beide Bilder passen sich dem Platz an; dazwischen ein sichtbarer, verschiebbarer Teiler. Rechts in
+        // der Ueberschrift jedes Bilds ein Kaestchen zum Ausblenden - das andere Bild bekommt dann die ganze
+        // Flaeche, und das Kaestchen des ausgeblendeten wandert dorthin, damit man es wieder einblenden kann.
         _previewHostNote.Font = new Font(Font, FontStyle.Bold);
         _previewHostNote.Height = _previewHostNote.Font.Height + LogicalToDeviceUnits(10);
-        previews.Controls.Add(_preview);
-        previews.Controls.Add(new Label { Text = "Info-Panel in Originalgröße", AutoSize = true, Margin = new Padding(3, 10, 3, 4) });
-        previews.Controls.Add(_detail);
+        var detailCaption = new Label { Text = "Info-Panel – Doppelklick: Originalgröße / einpassen", AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(3, 6, 3, 4) };
+        var screenBoxes = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Anchor = AnchorStyles.Right, Margin = Padding.Empty };
+        var panelBoxes = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Anchor = AnchorStyles.Right, Margin = Padding.Empty };
+        TableLayoutPanel PreviewPane(Control caption, FlowLayoutPanel boxes, Control picture)
+        {
+            var header = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 2, RowCount = 1, Margin = Padding.Empty };
+            header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            caption.Anchor = AnchorStyles.Left;
+            header.Controls.Add(caption);
+            header.Controls.Add(boxes);
+            var pane = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, Margin = Padding.Empty, BackColor = SystemColors.Control };
+            pane.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            pane.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            pane.Controls.Add(header);
+            pane.Controls.Add(picture);
+            return pane;
+        }
+        _previewSplit.Panel1.Controls.Add(PreviewPane(_previewCaption, screenBoxes, _preview));
+        _previewSplit.Panel2.Controls.Add(PreviewPane(detailCaption, panelBoxes, _detail));
+        // Der Teiler soll als Griff erkennbar sein: etwas breiter und abgesetzt.
+        _previewSplit.SplitterWidth = LogicalToDeviceUnits(7);
+        _previewSplit.BackColor = SystemColors.ControlDark;
+        _previewSplit.Panel1.BackColor = _previewSplit.Panel2.BackColor = SystemColors.Control;
+        _tips.SetToolTip(_previewSplit, "Teiler ziehen: Platz zwischen Bildschirm-Vorschau und Info-Panel verteilen");
         _detail.Resize += (_, _) => FitDetail();
+        _detail.DoubleClick += (_, _) =>
+        {
+            _detailOriginalSize = !_detailOriginalSize;
+            FitDetail();
+            _status.Text = _detailOriginalSize ? "Info-Panel in Originalgröße (Doppelklick: einpassen)." : "Info-Panel eingepasst (Doppelklick: Originalgröße).";
+        };
 
+        var layout = ReadLayout();
+        var showScreen = new CheckBox { Text = "Bildschirm", AutoSize = true, Checked = !layout.TryGetValue("preview.screen", out var s1) || s1 != "0", Margin = new Padding(8, 3, 3, 3) };
+        var showPanel = new CheckBox { Text = "Info-Panel", AutoSize = true, Checked = !layout.TryGetValue("preview.panel", out var s2) || s2 != "0", Margin = new Padding(8, 3, 3, 3) };
+        _tips.SetToolTip(showScreen, "Vorschau des ganzen Bildschirms ein- oder ausblenden – das Info-Panel bekommt dann die ganze Fläche");
+        _tips.SetToolTip(showPanel, "Vorschau des Info-Panels ein- oder ausblenden – der Bildschirm bekommt dann die ganze Fläche");
+        void PlacePreviewBoxes()
+        {
+            // Jedes Kaestchen steht bei seinem Bild; ist das Bild ausgeblendet, beim anderen.
+            screenBoxes.Controls.Clear();
+            panelBoxes.Controls.Clear();
+            (showScreen.Checked ? screenBoxes : panelBoxes).Controls.Add(showScreen);
+            (showPanel.Checked ? panelBoxes : screenBoxes).Controls.Add(showPanel);
+        }
+        void ApplyPreviewToggles(CheckBox changed)
+        {
+            // Eines bleibt immer sichtbar.
+            if (!showScreen.Checked && !showPanel.Checked)
+            {
+                (changed == showScreen ? showPanel : showScreen).Checked = true;
+                return;
+            }
+            _previewSplit.Panel1Collapsed = !showScreen.Checked;
+            _previewSplit.Panel2Collapsed = !showPanel.Checked;
+            PlacePreviewBoxes();
+            SaveLayout("preview.screen", showScreen.Checked ? "1" : "0");
+            SaveLayout("preview.panel", showPanel.Checked ? "1" : "0");
+        }
+        showScreen.CheckedChanged += (_, _) => ApplyPreviewToggles(showScreen);
+        showPanel.CheckedChanged += (_, _) => ApplyPreviewToggles(showPanel);
+        if (!showScreen.Checked && !showPanel.Checked)
+        {
+            showScreen.Checked = true;
+        }
+        _previewSplit.Panel1Collapsed = !showScreen.Checked;
+        _previewSplit.Panel2Collapsed = !showPanel.Checked;
+        PlacePreviewBoxes();
+
+        var previews = new Panel { Dock = DockStyle.Fill, Padding = new Padding(6) };
+        previews.Controls.Add(_previewSplit);
         _split.Panel1.Controls.Add(tabs);
         _split.Panel2.Controls.Add(previews);
 
@@ -191,6 +261,12 @@ public sealed class MainForm : Form
                 // Editor soll trotzdem starten.
             }
             _split.Panel2Collapsed = !_previewEnabled;
+            // Mindestgroessen erst jetzt: vor dem ersten Layout ist ein SplitContainer winzig, und Windows
+            // Forms lehnt Mindestgroessen ab, die nicht hineinpassen (Absturz beim Start).
+            SetMinSizes(_itemsSplit, 200);
+            SetMinSizes(_previewSplit, 60);
+            RestoreSplit(_itemsSplit, "split.items", 0.5);
+            RestoreSplit(_previewSplit, "split.preview", 0.45);
             if (fileToOpen != null && File.Exists(fileToOpen))
             {
                 OpenFile(fileToOpen);
@@ -418,18 +494,42 @@ public sealed class MainForm : Form
                 InsertAtCaret(dialog.Placeholder);
             }
         };
+        // Platzhalter mit Dateipfad ueber den Explorer zusammenstellen und an der Schreibmarke einfuegen.
+        var fileTag = new Button { Text = "Datei wählen…", AutoSize = true, Dock = DockStyle.Bottom };
+        _tips.SetToolTip(fileTag, "Eine Datei im Explorer wählen und daraus einen Platzhalter einfügen:\r\n{file:…} erste Zeile, {filever:…} Dateiversion, {filetime:…} Änderungsdatum.\r\nPfade mit Leerzeichen gehen mit und ohne Anführungszeichen.");
+        var fileMenu = new ContextMenuStrip();
+        void AddFileTag(string kind, string text)
+        {
+            fileMenu.Items.Add(text, null, (_, _) =>
+            {
+                using var dialog = new OpenFileDialog { Title = text, Filter = kind == "file" ? "Textdateien (*.txt;*.ini;*.log;*.csv)|*.txt;*.ini;*.log;*.csv|Alle Dateien|*.*" : "Alle Dateien|*.*" };
+                if (dialog.ShowDialog(this) == DialogResult.OK)
+                {
+                    InsertAtCaret($"{{{kind}:{dialog.FileName}}}");
+                }
+            });
+        }
+        AddFileTag("file", "Erste Zeile einer Datei – {file:…}");
+        AddFileTag("filever", "Dateiversion – {filever:…}");
+        AddFileTag("filetime", "Änderungsdatum einer Datei – {filetime:…}");
+        fileTag.Click += (_, _) => fileMenu.Show(fileTag, new Point(0, fileTag.Height));
+
         // Reihenfolge zaehlt: das fuellende Element zuerst.
         tagBox.Controls.Add(_tags);
+        tagBox.Controls.Add(fileTag);
         tagBox.Controls.Add(wmi);
         tagBox.Controls.Add(searchRow);
         tagBox.Controls.Add(tagHint);
 
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Padding = new Padding(8) };
-        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        root.Controls.Add(left);
-        root.Controls.Add(tagBox);
+        // Verschiebbarer Teiler zwischen Zeilen und Platzhaltern - wie der zur Vorschau; die Stellung bleibt gemerkt.
+        _itemsSplit.Panel1.Controls.Add(left);
+        _itemsSplit.Panel2.Controls.Add(tagBox);
+        _itemsSplit.Panel2.Padding = new Padding(4, 0, 0, 0);
+        _itemsSplit.SplitterWidth = LogicalToDeviceUnits(7);
+        _itemsSplit.BackColor = SystemColors.ControlDark;
+        _itemsSplit.Panel1.BackColor = _itemsSplit.Panel2.BackColor = SystemColors.Control;
+        var root = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8) };
+        root.Controls.Add(_itemsSplit);
 
         // Nicht waehrend _loading: beim Ersetzen eines Listeneintrags (EditSelectedItem) meldet die
         // ListBox kurz "nichts ausgewaehlt" - das wuerde die Textfelder deaktivieren, und das Feld, in
@@ -484,6 +584,31 @@ public sealed class MainForm : Form
         }, () => _config.Panel.Position, v => _config.Panel.Position = v));
         Row(table, "Abstand zum Bildschirmrand", Number(0, 2000, () => _config.Panel.Margin, v => _config.Panel.Margin = (int)v));
         Row(table, "Innenabstand", Number(0, 500, () => _config.Panel.Padding, v => _config.Panel.Padding = (int)v));
+        // Gesamt-Deckkraft: Schieberegler und Zahlenfeld, beide verbunden.
+        var opacityBar = new TrackBar { Minimum = 0, Maximum = 100, TickFrequency = 10, SmallChange = 1, LargeChange = 10, Width = 260, AutoSize = false, Height = LogicalToDeviceUnits(30) };
+        var opacityBox = Number(0, 100, () => _config.Panel.Opacity, v => _config.Panel.Opacity = (int)v);
+        opacityBox.Width = 70;
+        _loaders.Add(() => opacityBar.Value = Math.Clamp(_config.Panel.Opacity, 0, 100));
+        opacityBar.ValueChanged += (_, _) =>
+        {
+            if (!_loading && opacityBox.Value != opacityBar.Value)
+            {
+                opacityBox.Value = opacityBar.Value; // meldet die Aenderung ueber das Zahlenfeld
+            }
+        };
+        opacityBox.ValueChanged += (_, _) =>
+        {
+            if (opacityBar.Value != (int)opacityBox.Value)
+            {
+                opacityBar.Value = (int)opacityBox.Value;
+            }
+        };
+        var opacityRow = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
+        opacityRow.Controls.Add(opacityBar);
+        opacityRow.Controls.Add(opacityBox);
+        opacityRow.Controls.Add(new Label { Text = "%", AutoSize = true, Margin = new Padding(4, 7, 3, 0) });
+        Row(table, "Gesamt-Deckkraft", opacityRow);
+        Row(table, "", Hint("Verrechnet sich mit allen eingestellten Deckkräften – Hintergrund, Schatten, Texte, Balken, Rahmen.\r\n100 % = wie eingestellt, 50 % = alles halb so deckend."));
         Row(table, "", Check("Größe mit der Windows-Skalierung des Monitors vergrößern", () => _config.Panel.ScaleWithDpi, v => _config.Panel.ScaleWithDpi = v));
 
         Heading(table, "Breite des Panels");
@@ -1139,12 +1264,18 @@ public sealed class MainForm : Form
             ReadOnly = true,
             DefaultCellStyle = new DataGridViewCellStyle { BackColor = SystemColors.Control, ForeColor = SystemColors.GrayText }
         });
+        // Bezeichnung: erscheint als "Bedeutung" in der Platzhalterliste und als Bezeichnung einer Zeile,
+        // die per Doppelklick oder Ziehen entsteht. Spalte 3, angezeigt gleich nach dem Namen.
+        _fields.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Bezeichnung (für Zeilen)", FillWeight = 22, DisplayIndex = 1 });
+        _fields.Columns[0].FillWeight = 20;
+        _fields.Columns[1].FillWeight = 36;
+        _fields.Columns[2].FillWeight = 22;
         void LoadFields()
         {
             _fields.Rows.Clear();
             foreach (var (name, definition) in _config.Fields)
             {
-                _fields.Rows.Add(name, definition, "");
+                _fields.Rows.Add(name, definition, "", _config.Fields.LabelOf(name) ?? "");
             }
             ScheduleCurrentValues();
         }
@@ -1154,13 +1285,18 @@ public sealed class MainForm : Form
             {
                 return;
             }
-            var fields = new Dictionary<string, string>();
+            var fields = new FieldMap();
             foreach (DataGridViewRow row in _fields.Rows)
             {
                 var name = (row.Cells[0].Value as string ?? "").Trim().Trim('{', '}');
                 if (!row.IsNewRow && name.Length > 0)
                 {
                     fields[name] = row.Cells[1].Value as string ?? "";
+                    var label = (row.Cells[3].Value as string ?? "").Trim();
+                    if (label.Length > 0)
+                    {
+                        fields.Labels[name] = label;
+                    }
                 }
             }
             _config.Fields = fields;
@@ -1170,6 +1306,98 @@ public sealed class MainForm : Form
         _loaders.Add(LoadFields);
         _fields.CellValueChanged += (_, _) => StoreFields();
         _fields.RowsRemoved += (_, _) => StoreFields();
+
+        // Kopieren und Einfuegen ganzer Felder - z.B. in die Tabelle eines anderen Editorfensters.
+        // Format: je Feld eine Zeile "Name<Tab>Value<Tab>Bezeichnung".
+        void CopyFields()
+        {
+            var rows = _fields.SelectedCells.Cast<DataGridViewCell>().Select(cell => cell.OwningRow).Distinct()
+                .Where(row => !row.IsNewRow).OrderBy(row => row.Index).ToList();
+            if (rows.Count == 0)
+            {
+                return;
+            }
+            var text = string.Join(Environment.NewLine, rows.Select(row =>
+                string.Join('\t', (row.Cells[0].Value as string ?? "").Trim(), row.Cells[1].Value as string ?? "", (row.Cells[3].Value as string ?? "").Trim())));
+            Clipboard.SetText(text);
+            _status.Text = $"{rows.Count} Feld(er) kopiert – mit Strg+V in der Feldtabelle eines anderen Editorfensters einfügen.";
+        }
+        void PasteFields()
+        {
+            if (!Clipboard.ContainsText())
+            {
+                return;
+            }
+            var incoming = Clipboard.GetText().Split('\n').Select(line => line.TrimEnd('\r')).Where(line => line.Contains('\t'))
+                .Select(line => line.Split('\t')).Where(parts => parts[0].Trim().Trim('{', '}').Length > 0).ToList();
+            if (incoming.Count == 0)
+            {
+                _status.Text = "In der Zwischenablage stehen keine Felder (je Zeile Name, Tabulator, Value).";
+                return;
+            }
+            var existing = _fields.Rows.Cast<DataGridViewRow>().Where(row => !row.IsNewRow)
+                .ToDictionary(row => (row.Cells[0].Value as string ?? "").Trim().Trim('{', '}'), row => row, StringComparer.OrdinalIgnoreCase);
+            var clashes = incoming.Select(parts => parts[0].Trim().Trim('{', '}')).Where(existing.ContainsKey).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            var replace = false;
+            if (clashes.Count > 0)
+            {
+                var answer = MessageBox.Show(this,
+                    $"Diese Felder gibt es schon: {string.Join(", ", clashes)}\r\n\r\nJa\t\t= ersetzen\r\nNein\t\t= überspringen\r\nAbbrechen\t= nichts einfügen",
+                    AppTitle, MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+                if (answer == DialogResult.Cancel)
+                {
+                    return;
+                }
+                replace = answer == DialogResult.Yes;
+            }
+            var added = 0;
+            _loading = true;
+            foreach (var parts in incoming)
+            {
+                var name = parts[0].Trim().Trim('{', '}');
+                var value = parts.Length > 1 ? parts[1] : "";
+                var label = parts.Length > 2 ? parts[2].Trim() : "";
+                if (existing.TryGetValue(name, out var row))
+                {
+                    if (!replace)
+                    {
+                        continue;
+                    }
+                    row.Cells[1].Value = value;
+                    row.Cells[3].Value = label;
+                }
+                else
+                {
+                    _fields.Rows.Add(name, value, "", label);
+                }
+                added++;
+            }
+            _loading = false;
+            StoreFields();
+            ScheduleCurrentValues();
+            _status.Text = $"{added} Feld(er) eingefügt.";
+        }
+        _fields.KeyDown += (_, e) =>
+        {
+            if (_fields.IsCurrentCellInEditMode)
+            {
+                return;
+            }
+            if (e.Control && e.KeyCode == Keys.C)
+            {
+                CopyFields();
+                e.Handled = e.SuppressKeyPress = true;
+            }
+            else if (e.Control && e.KeyCode == Keys.V)
+            {
+                PasteFields();
+                e.Handled = e.SuppressKeyPress = true;
+            }
+        };
+        var fieldMenu = new ContextMenuStrip();
+        fieldMenu.Items.Add("Felder kopieren (Strg+C)", null, (_, _) => CopyFields());
+        fieldMenu.Items.Add("Felder einfügen (Strg+V)", null, (_, _) => PasteFields());
+        _fields.ContextMenuStrip = fieldMenu;
 
         var wmi = new Button { Text = "WMI-Abfrage in die Definition einfügen…", AutoSize = true };
         wmi.Click += (_, _) =>
@@ -1391,10 +1619,21 @@ public sealed class MainForm : Form
         return table;
     }
 
-    private static TabPage ScrollPage(string title, Control content)
+    private TabPage ScrollPage(string title, Control content)
     {
         var page = new TabPage(title) { AutoScroll = true };
         page.Controls.Add(content);
+        // Klick auf eine freie Stelle uebernimmt die Eingabe des Felds, in dem gerade getippt wird.
+        void Commit(object? sender, MouseEventArgs e)
+        {
+            if (ActiveControl is { } active && active.ContainsFocus)
+            {
+                Validate();
+                page.Focus();
+            }
+        }
+        page.MouseDown += Commit;
+        content.MouseDown += Commit;
         return page;
     }
 
@@ -1427,6 +1666,17 @@ public sealed class MainForm : Form
             if (!_loading)
             {
                 set(box.Value);
+                Changed();
+            }
+        };
+        // Schon beim Tippen uebernehmen - ValueChanged kommt erst, wenn das Feld verlassen wird. Die
+        // Vorschau rendert dann kurz nach der letzten Eingabe (SchedulePreview).
+        box.TextChanged += (_, _) =>
+        {
+            if (!_loading && decimal.TryParse(box.Text, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.CurrentCulture, out var typed)
+                && typed >= min && typed <= max)
+            {
+                set(Math.Round(typed, decimals));
                 Changed();
             }
         };
@@ -2424,7 +2674,7 @@ public sealed class MainForm : Form
                 var resolver = new ValueResolver(config);
                 var list = config.Fields.Keys
                     .Where(name => name.Trim().Length > 0)
-                    .Select(name => (Tag: $"{{{name.Trim()}}}", Description: local.Contains(name) ? "Eigenes Feld" : "Feld der zentralen Datei", Value: resolver.Expand($"{{{name.Trim()}}}")))
+                    .Select(name => (Tag: $"{{{name.Trim()}}}", Description: config.Fields.LabelOf(name) ?? (local.Contains(name) ? "Eigenes Feld" : "Feld der zentralen Datei"), Value: resolver.Expand($"{{{name.Trim()}}}")))
                     .ToList();
                 list.AddRange(ValueResolver.BuiltIns
                     .Select(b => (Tag: $"{{{b.Name}}}", b.Description, Value: resolver.Expand($"{{{b.Name}}}"))));
@@ -3289,6 +3539,95 @@ public sealed class MainForm : Form
                 : "BGInfo-Reloaded.exe setzt hier nur den Hintergrund, ohne Panel. Die Vorschau zeigt das Panel trotzdem.");
     }
 
+    // ------------------------------------------------------------------ Gemerkte Aufteilung des Fensters
+
+    private static string LayoutFile => Path.Combine(WallpaperState.StateDirectory, "editor-layout.txt");
+
+    /// <summary>Gemerkte Einstellungen der Oberflaeche je Benutzer ("schluessel=wert" je Zeile); leer, wenn es noch keine gibt.</summary>
+    private static Dictionary<string, string> ReadLayout()
+    {
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            if (File.Exists(LayoutFile))
+            {
+                foreach (var line in File.ReadAllLines(LayoutFile))
+                {
+                    var equals = line.IndexOf('=');
+                    if (equals > 0)
+                    {
+                        result[line[..equals].Trim()] = line[(equals + 1)..].Trim();
+                    }
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // dann eben mit der Grundeinstellung
+        }
+        return result;
+    }
+
+    private static void SaveLayout(string key, string value)
+    {
+        try
+        {
+            var layout = ReadLayout();
+            layout[key] = value;
+            Directory.CreateDirectory(WallpaperState.StateDirectory);
+            File.WriteAllLines(LayoutFile, layout.Select(pair => $"{pair.Key}={pair.Value}"));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // nur Komfort
+        }
+    }
+
+    private static void SetMinSizes(SplitContainer split, int pixels)
+    {
+        try
+        {
+            var size = split.Orientation == Orientation.Vertical ? split.Width : split.Height;
+            if (size > pixels * 2 + split.SplitterWidth)
+            {
+                split.Panel1MinSize = pixels;
+                split.Panel2MinSize = pixels;
+            }
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+        {
+            // dann ohne Mindestgroesse
+        }
+    }
+
+    /// <summary>Teiler auf einen gemerkten Anteil (0 bis 1) setzen; Fehler beim Zeichnen (gesperrte Sitzung) uebergehen.</summary>
+    private static void RestoreSplit(SplitContainer split, string key, double fallback)
+    {
+        try
+        {
+            var size = split.Orientation == Orientation.Vertical ? split.Width : split.Height;
+            var ratio = ReadLayout().TryGetValue(key, out var text) && double.TryParse(text, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var stored) ? stored : fallback;
+            var distance = (int)Math.Round(size * Math.Clamp(ratio, 0.1, 0.9));
+            if (distance > split.Panel1MinSize && distance < size - split.Panel2MinSize)
+            {
+                split.SplitterDistance = distance;
+            }
+        }
+        catch (Exception ex) when (ex is System.Runtime.InteropServices.ExternalException or InvalidOperationException or ArgumentException)
+        {
+            // kein benutzbarer Bildschirm - Aufteilung ist nur Komfort
+        }
+        split.SplitterMoved += (_, _) =>
+        {
+            var size = split.Orientation == Orientation.Vertical ? split.Width : split.Height;
+            if (size > 0)
+            {
+                SaveLayout(key, (split.SplitterDistance / (double)size).ToString("0.###", System.Globalization.CultureInfo.InvariantCulture));
+            }
+        };
+    }
+
     /// <summary>Merkt sich je Benutzer, ob der Vorschaubereich eingeblendet ist.</summary>
     private static string PreviewSettingFile => Path.Combine(WallpaperState.StateDirectory, "editor-preview.txt");
 
@@ -3507,11 +3846,12 @@ public sealed class MainForm : Form
     }
 
     /// <summary>Originalgroesse, solange das Panel in das Feld passt - sonst verkleinern statt abschneiden.</summary>
+    /// <summary>Eingepasst (Standard: so gross, wie der Platz erlaubt) oder in Originalgroesse - dann nur verkleinert, wenn es nicht passt.</summary>
     private void FitDetail()
     {
         if (_detail.Image is { } image)
         {
-            _detail.SizeMode = image.Width > _detail.ClientSize.Width || image.Height > _detail.ClientSize.Height
+            _detail.SizeMode = !_detailOriginalSize || image.Width > _detail.ClientSize.Width || image.Height > _detail.ClientSize.Height
                 ? PictureBoxSizeMode.Zoom
                 : PictureBoxSizeMode.CenterImage;
         }

@@ -75,6 +75,12 @@ public sealed class PanelConfig
 
     /// <summary>Hoehe der Balken ("bar" einer Zeile) in Pixeln; wird wie das Panel skaliert.</summary>
     public int BarHeight { get; set; } = 8;
+
+    /// <summary>
+    /// Gesamt-Deckkraft des Panels in Prozent (0 bis 100): verrechnet sich mit allen eingestellten
+    /// Deckkraeften (Hintergrund, Schatten, Texte, Balken, Rahmen). 100 = wie eingestellt.
+    /// </summary>
+    public int Opacity { get; set; } = 100;
 }
 
 public enum TextOverflow
@@ -706,10 +712,102 @@ public sealed class UpdateConfig
     public const string DefaultRepo = "https://github.com/Kilowatt-W/bginfo-reloaded";
 }
 
+/// <summary>
+/// Eigene Felder: Name -> Definition, dazu je Feld eine optionale Bezeichnung (<see cref="Labels"/>).
+/// In der JSON steht ein Feld kurz als "name": "{definition}" oder - mit Bezeichnung - als
+/// "name": { "value": "{definition}", "label": "Text" }. Beide Formen werden gelesen.
+/// </summary>
+[JsonConverter(typeof(FieldMapConverter))]
+public sealed class FieldMap : Dictionary<string, string>
+{
+    public FieldMap() : base(StringComparer.Ordinal)
+    {
+    }
+
+    /// <summary>Bezeichnung je Feld (Name ohne Klammern) - erscheint als "Bedeutung" und als Bezeichnung einer neuen Zeile.</summary>
+    public Dictionary<string, string> Labels { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    public string? LabelOf(string name) =>
+        Labels.TryGetValue(name.Trim().Trim('{', '}'), out var label) && !string.IsNullOrWhiteSpace(label) ? label : null;
+}
+
+public sealed class FieldMapConverter : JsonConverter<FieldMap>
+{
+    public override FieldMap Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        var map = new FieldMap();
+        if (reader.TokenType == JsonTokenType.Null)
+        {
+            return map;
+        }
+        if (reader.TokenType != JsonTokenType.StartObject)
+        {
+            throw new JsonException("\"fields\" muss ein Objekt sein: { \"name\": \"{definition}\" }.");
+        }
+        while (reader.Read() && reader.TokenType != JsonTokenType.EndObject)
+        {
+            var name = reader.GetString() ?? "";
+            reader.Read();
+            if (reader.TokenType == JsonTokenType.String)
+            {
+                map[name] = reader.GetString() ?? "";
+            }
+            else if (reader.TokenType == JsonTokenType.StartObject)
+            {
+                string value = "", label = "";
+                while (reader.Read() && reader.TokenType != JsonTokenType.EndObject)
+                {
+                    var key = reader.GetString() ?? "";
+                    reader.Read();
+                    var text = reader.TokenType == JsonTokenType.String ? reader.GetString() ?? "" : "";
+                    if (key.Equals("value", StringComparison.OrdinalIgnoreCase))
+                    {
+                        value = text;
+                    }
+                    else if (key.Equals("label", StringComparison.OrdinalIgnoreCase))
+                    {
+                        label = text;
+                    }
+                }
+                map[name] = value;
+                if (label.Length > 0)
+                {
+                    map.Labels[name] = label;
+                }
+            }
+            else
+            {
+                reader.Skip();
+            }
+        }
+        return map;
+    }
+
+    public override void Write(Utf8JsonWriter writer, FieldMap value, JsonSerializerOptions options)
+    {
+        writer.WriteStartObject();
+        foreach (var (name, definition) in value)
+        {
+            if (value.LabelOf(name) is { } label)
+            {
+                writer.WriteStartObject(name);
+                writer.WriteString("value", definition);
+                writer.WriteString("label", label);
+                writer.WriteEndObject();
+            }
+            else
+            {
+                writer.WriteString(name, definition);
+            }
+        }
+        writer.WriteEndObject();
+    }
+}
+
 /// <summary>Was aus einer per "include" eingebundenen Datei uebernommen wird - bewusst nur Felder und Zeilen.</summary>
 public sealed class IncludeFile
 {
-    public Dictionary<string, string>? Fields { get; set; }
+    public FieldMap? Fields { get; set; }
     public List<ItemConfig>? Items { get; set; }
 }
 
@@ -746,7 +844,7 @@ public sealed class AppConfig
     /// Eigene, benannte Platzhalter: "modell": "{wmi:Win32_ComputerSystem.Model}" macht {modell}
     /// in allen Zeilen verfuegbar. Die Definition darf selbst Platzhalter und freien Text enthalten.
     /// </summary>
-    public Dictionary<string, string> Fields { get; set; } = new();
+    public FieldMap Fields { get; set; } = new();
 
     public List<ItemConfig> Items { get; set; } = DefaultItems();
 
@@ -1121,6 +1219,10 @@ public sealed class AppConfig
             if (!Fields.Keys.Any(key => string.Equals(key, name, StringComparison.OrdinalIgnoreCase)))
             {
                 Fields[name] = definition;
+                if (central!.Fields!.LabelOf(name) is { } label)
+                {
+                    Fields.Labels[name] = label;
+                }
             }
         }
         // Keine Verschachtelung: ein "includeItems" in der zentralen Datei haette nichts, worauf es zeigt.
