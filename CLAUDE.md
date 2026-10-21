@@ -202,12 +202,25 @@ echtes Windows nötig, das in dieser Entwicklungsumgebung nicht zur Verfügung s
   `AppConfig.BaseDirectory` (Ordner der Konfigurationsdatei) – immer über
   `ResolveWallpaperPath()` auflösen, nie über das Arbeitsverzeichnis.
 - **Rechnergruppen (`HostsConfig.Groups`, seit 2.15.0)**: die Gruppen werden von oben nach unten
-  geprüft, die erste passende entscheidet – eigene Datei (`config`), diese Konfiguration
-  (`mode: ThisConfig`) oder kein Panel (ohne `config`). `AppConfig.Load` leitet über
+  geprüft, die erste passende entscheidet – Profil (`profile`), eigene Datei (`config`), sonst das
+  Standardprofil; kein Panel nur mit `mode: Exclude` (`HostGroup.Excludes`). `AppConfig.Load` leitet über
   `ResolveGroupConfig` auf die Gruppendatei um (Cache je Quelle, keine Verschachtelung: `hosts` der
-  Gruppendatei wird verworfen); der Editor öffnet Dateien direkt und leitet nie um. Das frühere
+  Gruppendatei wird verworfen), sonst über `ResolveGroupProfile` auf das Profil; der Editor öffnet
+  Dateien direkt und leitet nie um. Das frühere
   Format (`include`/`exclude` samt Listendateien) wird beim Laden über `MigrateLegacyLists` in
   Gruppen umgewandelt – die alten Eigenschaften sind danach `null` und werden nicht mehr geschrieben.
+- **Profile (`AppConfig.Profiles`, seit 2.19.0)**: je Profil ein `JsonObject` nur mit den Abweichungen
+  vom Standardprofil (der Datei ohne `profiles`). `WithProfile` setzt zusammen (`MergeInto`: Blöcke
+  der obersten Ebene Wert für Wert, alles darunter und Listen als Ganzes), `StoreProfile`/`Diff`
+  rechnen zurück – beide genau eine Ebene tief halten, sonst gehen z. B. Feldbezeichnungen verloren.
+  `configFormat`, `hosts`, `profiles` (`FileOnlyKeys`) gelten nur für die Datei. Fehlt
+  `configFormat` beim Lesen (Datei vor 2.19), macht `UpgradeFromFormat1` aus Gruppen ohne
+  `config` `mode: Exclude` – früher hieß das „kein Panel“. Der Editor schreibt für Profil und
+  Standardprofil `mode: ThisConfig`, damit ältere exe wenigstens das Standardprofil zeigen. Im Editor
+  ist `_root` die Datei, `_config` das gewählte Profil (im Standardprofil dasselbe Objekt; `Hosts`
+  ist immer das Objekt von `_root`); vor Speichern und Profilwechsel `CommitProfile()`, nach
+  Änderungen am Standardprofil aus einem Profil heraus `RebuildProfile()`. Profilcode steht in
+  `editor/MainForm.Profiles.cs`.
 - **Einträge der Gruppen**: ein Eintrag ist Namensmuster oder IPv4-Angabe (Adresse, CIDR,
   Bereich). `TryParseAddressRange` ist absichtlich streng (vier Zahlen mit Punkten), damit Namen wie
   `pc-10` Namensmuster bleiben. Wer prüft, ob ein Eintrag auf den Rechner passt, nimmt

@@ -4,6 +4,7 @@
 // oder ueber die Umgebungsvariable BGINFORELOADED_CONFIG referenzieren.
 // Kommentare und abschliessende Kommas sind erlaubt. Alles Weggelassene behaelt den Standardwert.
 {
+  "configFormat": 2,  // Format dieser Datei (2 = ab Version 2.19: Profile; Gruppe ohne Angabe = Standardprofil)
   "version": "1.0",   // frei waehlbare Version dieser Datei, als {configversion} im Panel nutzbar
   "description": "Beispielkonfiguration",   // eigene Anmerkungen; bleiben beim Speichern im Editor erhalten
   "panel": {
@@ -57,12 +58,15 @@
     // oder IP-Angaben: Adresse (10.10.1.5), Netz (10.10.0.0/16), Bereich (10.10.1.10-10.10.1.50, kurz 10.10.1.10-50).
     // Platzhalter * und ? stehen an jeder Stelle (*-ts-*, mh-??-xama, *xama*); Gross-/Kleinschreibung spielt keine Rolle.
     // Rechnergruppen, von oben nach unten geprueft - die erste passende entscheidet. Rechner ohne Gruppe
-    // bekommen diese Konfiguration. Beispiele (zum Benutzen in "groups" eintragen):
-    //   { "name": "Blacklist", "match": ["KIOSK-*", "PC-0??", "10.10.99.0/24"] }                          ohne "config": kein Panel
-    //   { "name": "Server",    "match": ["SRV-*"], "config": ".\\BGInfo-Server.json" }                     eigene Konfigurationsdatei
+    // bekommen das Standardprofil (diese Datei ohne "profiles"). Beispiele (zum Benutzen in "groups" eintragen):
+    //   { "name": "Kiosk",     "match": ["KIOSK-*", "PC-0??", "10.10.99.0/24"], "mode": "Exclude" }       kein Panel
+    //   { "name": "Server",    "match": ["SRV-*"], "profile": "Server" }                                  Profil aus "profiles"
+    //   { "name": "Labor",     "match": ["LAB-*"], "config": ".\\BGInfo-Labor.json" }                     eigene Konfigurationsdatei
     //   { "name": "Notebooks", "matchFile": "\\\\fileserver.example.com\\share\\bginfo\\notebooks.txt",    Liste aus einer Datei
     //                          "config": "\\\\fileserver.example.com\\share\\bginfo\\notebook.json" }
-    //   { "name": "Verwaltung", "match": ["VW-*"], "mode": "ThisConfig" }                                  diese Konfiguration
+    //   { "name": "Verwaltung", "match": ["VW-*"] }                                                        Standardprofil
+    // Ein Profil enthaelt nur die Abweichungen, z. B.:
+    //   "profiles": { "Server": { "panel": { "position": "BottomLeft" }, "items": [ ... ] } }
     "groups": [],
     // BackgroundOnly = Hintergrund ohne Panel setzen (Standard), Skip = Wallpaper gar nicht anfassen
     "onExcluded": "BackgroundOnly"

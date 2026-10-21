@@ -32,8 +32,9 @@ Technical background, license notes and the comparison with PowerBGInfo are in
   variables or files.
 - **Central distribution** – configuration from a UNC share or an http(s) URL, with a local cache
   for machines without a network connection.
-- **Machine groups** – group machines by name pattern (`*`, `?`) or IP range; every group gets its
-  own configuration file, the main configuration or no panel at all.
+- **Machine groups and profiles** – group machines by name pattern (`*`, `?`) or IP range; every
+  group gets a profile of the same file (only the differences from the default profile), the default
+  profile, its own configuration file or no panel at all.
 - **Autostart** – scheduled tasks at logon and at a fixed interval, without admin rights.
 - **Windowless** – no console window appears when run as a task.
 - **Log file** – every run is logged, errors can be traced.
@@ -79,7 +80,18 @@ The tabs and buttons (German labels in parentheses):
   taskbar, rounded corners, shadow, colours, opacity, font.
 - **Background (Hintergrund):** image file, fit to the resolution, image per resolution, behaviour
   with multiple monitors.
-- **Machines (Rechner):** machine groups with their own configuration or without a panel (formerly whitelist and blacklist).
+- **Machines (Rechner):** machine groups with a profile, their own configuration or without a panel
+  (formerly whitelist and blacklist).
+- **Profile (selection in the toolbar):** which profile is being edited – see
+  [Profiles](#profiles-several-configurations-in-one-file-profiles). In a profile, a blue line below
+  the toolbar names where it differs from the default profile; “Abweichungen anzeigen…” (show
+  differences) puts every setting next to the default profile and resets checked ones to its value.
+  The menu “Profile” creates, renames and deletes profiles and takes over other configuration files
+  as profiles.
+- **Copying between profiles:** in the line list Ctrl+C copies the selected line (a block start
+  together with its block), Ctrl+V pastes it – also in another profile or editor window. The context
+  menu “In Profil kopieren” appends lines directly to another profile; the field table has the same
+  for fields (“Felder in Profil kopieren”).
 - **File and fields (Datei und Felder):** version and description of the file, central file
   (`include`), custom fields.
 - **Autostart and tools (Autostart und Werkzeuge):** set up and remove the autostart tasks
@@ -312,8 +324,9 @@ value – so a file that only contains `items` is valid. A complete, commented t
   },
   "hosts": {
     "groups": [                                  // machine groups, the first matching one decides
-      { "name": "Blacklist", "match": ["KIOSK-*", "PC-0??"] },                    // no "config": no panel
-      { "name": "Servers", "match": ["SRV-*"], "config": ".\\BGInfo-Server.json" }  // own configuration
+      { "name": "Kiosk", "match": ["KIOSK-*", "PC-0??"], "mode": "Exclude" },     // no panel
+      { "name": "Servers", "match": ["SRV-*"], "profile": "Server" },              // profile from "profiles"
+      { "name": "Lab", "match": ["LAB-*"], "config": ".\\BGInfo-Lab.json" }        // own configuration
     ],
     "onExcluded": "BackgroundOnly"               // or "Skip"
   },
@@ -556,18 +569,18 @@ Tahoma, Arial or Verdana. Backslashes have to be doubled in JSON (`\\`).
 
 ### Machine groups: who gets which configuration (`hosts`)
 
-With a central configuration you can control which machines get which configuration – and which
-get no panel at all. This is done with groups, checked from top to bottom. The first group a
-machine matches decides:
+With a central configuration you can control which machines get which profile or configuration –
+and which get no panel at all. This is done with groups, checked from top to bottom. The first group
+a machine matches decides:
 
 ```jsonc
 "hosts": {
   "groups": [
-    { "name": "Blacklist", "match": ["KIOSK-*", "10.10.99.0/24"] },                                    // no "config": no panel
-    { "name": "Servers",   "match": ["SRV-*", "10.10.20.0/24"], "config": ".\\BGInfo-Server.json" },    // own file
+    { "name": "Kiosk",     "match": ["KIOSK-*", "10.10.99.0/24"], "mode": "Exclude" },                  // no panel
+    { "name": "Servers",   "match": ["SRV-*", "10.10.20.0/24"], "profile": "Server" },                 // profile of this file
     { "name": "Notebooks", "matchFile": "\\\\fileserver.example.com\\share\\bginfo\\notebooks.txt",
-                           "config": "\\\\fileserver.example.com\\share\\bginfo\\notebook.json" },
-    { "name": "Office",    "match": ["OF-*"], "mode": "ThisConfig" }                                   // this configuration
+                           "config": "\\\\fileserver.example.com\\share\\bginfo\\notebook.json" },     // own file
+    { "name": "Office",    "match": ["OF-*"] }                                                         // default profile
   ],
   "onExcluded": "BackgroundOnly"
 }
@@ -578,17 +591,21 @@ machine matches decides:
 | `name` | free text, shown in the log and in the editor |
 | `match` | computer names and IP entries of the group (see below) |
 | `matchFile` | further entries from a text file (path, UNC, URL; relative to the configuration file), read anew on every run |
+| `profile` | a profile from `profiles` of the same file (see [Profiles](#profiles-several-configurations-in-one-file-profiles)) |
 | `config` | configuration file for these machines (path, UNC, URL; relative to the main file). It applies to the group completely: content, appearance, background |
-| no `config` | no panel – the former blacklist |
-| `"mode": "ThisConfig"` | the machines of the group get this (main) configuration – the former whitelist |
-| `"mode": "Exclude"` | no panel, even if a file is entered |
+| neither `profile` nor `config` | the default profile – this file without a profile (like the former whitelist) |
+| `"mode": "Exclude"` | no panel (the former blacklist), even if a profile or a file is entered |
+| `"mode": "ThisConfig"` | same as no mode; the editor writes it for profile and default profile so that versions before 2.19 (which know no profiles) at least use the default profile |
 | `onExcluded` | What happens on machines without a panel: `BackgroundOnly` (default) sets the background as configured, just without the panel – this also removes a panel set earlier. `Skip` leaves the wallpaper completely untouched. |
 
-- Machines that are in no group get the main configuration.
-- The order decides: if a machine is in two groups, the upper one applies. A group without a
-  configuration at the very top therefore works like a blacklist with precedence.
-- A `*` as the only entry matches all machines. As the last group without `config` this means: all
-  remaining machines get no panel (this is how a whitelist used to work).
+- Machines that are in no group get the default profile.
+- The order decides: if a machine is in two groups, the upper one applies. A group with
+  `"mode": "Exclude"` at the very top therefore works like a blacklist with precedence.
+- A `*` as the only entry matches all machines. As the last group with `"mode": "Exclude"` this
+  means: all remaining machines get no panel (this is how a whitelist used to work).
+- **Files from before version 2.19** (without `"configFormat": 2`): there a group without `config`
+  meant “no panel”. That stays so when such files are read – the groups are treated as
+  `"mode": "Exclude"` and written that way on the next save.
 - In the file of a group, `groups` are not evaluated – the assignment is made by the main file
   alone, there is no nesting.
 - If the file of a group is not reachable, the version read last from the local cache applies; if
@@ -607,8 +624,16 @@ If a machine has several addresses, one match is enough. IPv4 is supported. A na
 checked against the addresses as text, so `10.10.*` works as well.
 
 **In the editor (tab “Rechner”):** a table shows the groups with their entries and effect. Groups
-can be added, changed, removed and moved in their order; “Konfiguration der Gruppe öffnen” opens
-the group's file and, if it does not exist yet, creates it as a copy of the open configuration. The
+can be added, changed, removed and moved in their order. The effects are “Profil aus dieser Datei”
+(profile from this file – a new name creates the profile), “Standardprofil” (default profile),
+“Eigene Konfigurationsdatei” (own configuration file) and “Kein Panel” (no panel). “Profil / Datei
+der Gruppe öffnen” selects the group's profile for editing or opens its file and, if it does not
+exist yet, creates it as a copy of the open configuration. “Datei als Profil übernehmen…” (take
+over file as profile) brings the selected group's file into the open file as a profile and switches
+the group from the file to the profile (see
+[Profiles](#profiles-several-configurations-in-one-file-profiles)). Below, “Profile dieser Datei”
+(profiles of this file) lists all profiles with their differences and the groups that get them;
+there they can be edited, created, renamed and deleted. The
 dialog of a group offers “Importieren…” and “Exportieren…” for the entries: a text file with one
 entry per line (also separated by comma or semicolon); empty lines and lines starting with `#` or
 `//` are skipped, duplicates removed. Below the table the editor says which group its own machine
@@ -622,13 +647,78 @@ other people than the configuration.
 
 **Former format:** up to version 2.14 there were separate lists `include`/`exclude` (with
 `includeFile`/`excludeFile`). Such files are still read: the blacklist becomes the group
-“Blacklist” at the very top, the whitelist the group “Whitelist” with `"mode": "ThisConfig"`,
+“Blacklist” at the very top (`"mode": "Exclude"`), the whitelist the group “Whitelist” with `"mode": "ThisConfig"`,
 followed by “Alle anderen” (all others) without a panel. After saving in the editor the file
 contains groups only.
 
 Whether and why a machine gets no panel, or which group file applies, is shown in the output and in
 the log (`Info-Panel auf diesem Rechner abgeschaltet: …`, `Gruppe „…“ (passt auf …): verwende …`).
 With `Skip` a panel set earlier stays until the wallpaper is changed otherwise.
+
+### Profiles: several configurations in one file (`profiles`)
+
+Instead of maintaining a file of its own for every group, the variants can be profiles in the same
+`BGInfo-Reloaded.json`. Everything outside `profiles` is the **default profile**; a profile only
+contains **what differs from it**. When the default profile changes, all profiles follow, as far as
+they do not set the value themselves.
+
+```jsonc
+{
+  "configFormat": 2,
+  "panel": { "position": "TopRight" },
+  "fields": { "department": "IT" },
+  "items": [ { "label": "Computer", "value": "{hostname}" }, { "label": "Department", "value": "{department}" } ],
+  "hosts": {
+    "groups": [ { "name": "Servers", "match": ["SRV-*"], "profile": "Server" } ]
+  },
+  "profiles": {
+    "Server": {
+      "panel": { "position": "BottomLeft" },            // only this value differs, the rest of "panel" stays
+      "fields": { "department": "Data centre" },        // per field
+      "items": [                                         // lists are replaced completely
+        { "label": "Server", "value": "{hostname}" },
+        { "label": "OS", "value": "{os}" }
+      ]
+    }
+  }
+}
+```
+
+- Blocks like `panel`, `colors`, `font`, `wallpaper`, `format`, `border` are overlaid **value by
+  value**, `fields` **per field**. Lists like `items` and all other values are replaced by the
+  profile as a whole. `null` removes a value of the default profile (e.g. `"include": null`).
+- `hosts` and `profiles` apply to the whole file only and are ignored inside a profile.
+- Which machine gets which profile is set in the groups (`"profile": "Name"`, upper and lower case
+  do not matter). If the profile does not exist, the log gets a warning and the default profile
+  applies.
+- `configFormat` is written by the program itself; it shows that the file already has the meaning
+  from version 2.19 on (group without anything = default profile).
+- Older program versions know no profiles. So that a machine that is not updated yet does not end
+  up without a panel, the editor writes `"mode": "ThisConfig"` into groups with a profile – an older
+  version shows the default profile there.
+
+**In the editor:** choose in “Profil” in the toolbar which one is edited; all tabs then show this
+profile and the preview renders it. Only the differences are saved. A blue line below the toolbar
+names them; “Abweichungen anzeigen…” lists every setting with its value in the default profile and
+in the profile (optionally also all others that come from the default profile), and “Markierte:
+Standardprofil verwenden” takes the checked ones out of the profile – they follow the default
+profile again. “Alles wie im Standardprofil” discards all differences. If the own machine is in a
+group with a different profile than the edited one, the orange line at the bottom says so.
+
+**Merging existing files:** select the group in the tab “Rechner” and choose “Datei als Profil
+übernehmen…” (name = name of the group) – or take one or more files at once via “Profile” →
+“Konfigurationsdateien als Profile übernehmen…” (name = file name without a leading
+`BGInfo-Reloaded-`/`BGInfo-`). First the editor asks **which parts** to take over: panel lines,
+custom fields, appearance (panel, font, colours, border), date and number format, background and
+monitors, central file, update settings, version and description – each with the number of values
+that differ from the default profile. Parts left unchecked come from the default profile. Below are
+the file's **custom fields** that the default profile does not have yet (or has with another value):
+checked ones move into the default profile together with their label and then apply to all profiles.
+New fields are preselected; a field with a different value changes it in the default profile for all
+profiles that do not set it themselves and is therefore not preselected. Only their differences from the default profile are stored; relative
+paths (background image, `include`, update folder) are rewritten for the folder of the open file.
+Groups whose `config` pointed to one of the files point to the profile afterwards. The files
+themselves stay unchanged and can be deleted once everything is fine.
 
 ### Lines (`items`)
 

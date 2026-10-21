@@ -13,7 +13,7 @@ windowless `BGInfo-Reloaded.exe` (self-contained, nothing has to be preinstalled
 machine, no PowerShell at runtime). Content and appearance of the panel come from a
 `BGInfo-Reloaded.json` that can be distributed centrally and edited with the included editor.
 
-Status: version 2.18.0 (2026-10-14). Up to version 1.4.0 the project was called "BgInfoNative".
+Status: version 2.19.0 (2026-10-21). Up to version 1.4.0 the project was called "BgInfoNative".
 
 - **Usage, all commands, configuration and troubleshooting:** [HOWTO.en.md](HOWTO.en.md)
   ([Deutsch](HOWTO.md))
@@ -138,8 +138,11 @@ is a trademark of Microsoft.
   saved files get explanatory default comments.
 - Machine groups (`hosts.groups`): computer names with `*` and `?` as well as IP addresses,
   networks and ranges, directly in the configuration or from a centrally maintained text file; per
-  group an own configuration file, the main configuration or no panel (the former whitelist and
-  blacklist are still read and converted); import and export in the editor.
+  group a profile, the default profile, an own configuration file or no panel (the former whitelist
+  and blacklist are still read and converted); import and export in the editor.
+- Profiles (`profiles`): several variants in one file, each profile only with its differences from
+  the default profile; in the editor selection, comparison with the default profile, merging existing
+  files into profiles and copying lines and fields between profiles.
 - Watch mode (`--watch`): re-render automatically when resolution or scaling changes.
 - `--list-tags`: all placeholders with their current value, also for whole WMI classes and registry
   keys.

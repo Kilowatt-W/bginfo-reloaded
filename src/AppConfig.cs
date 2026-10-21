@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 
 namespace BgInfoReloaded;
@@ -150,19 +151,19 @@ public enum ExcludedAction
 /// <summary>Was fuer die Rechner einer Gruppe gilt.</summary>
 public enum HostGroupMode
 {
-    /// <summary>Mit "config": diese Datei gilt fuer die Gruppe. Ohne "config": kein Panel (Blacklist).</summary>
+    /// <summary>Mit "config": diese Datei, mit "profile": dieses Profil, ohne beides: das Standardprofil. (Bis 2.18 hiess ohne "config" kein Panel.)</summary>
     Auto,
 
-    /// <summary>Die Rechner der Gruppe bekommen diese (Haupt-)Konfiguration - wie frueher die Whitelist.</summary>
+    /// <summary>Wie Auto ohne Datei: Profil bzw. Standardprofil. Schreibt der Editor fuer beides, damit Versionen vor 2.19 (ohne Profile) wenigstens das Standardprofil nehmen.</summary>
     ThisConfig,
 
-    /// <summary>Kein Panel, auch wenn eine Datei eingetragen ist.</summary>
+    /// <summary>Kein Panel, auch wenn eine Datei oder ein Profil eingetragen ist.</summary>
     Exclude
 }
 
 /// <summary>
 /// Eine Gruppe von Rechnern (Namensmuster, IP-Angaben, optional aus einer Listendatei) und was fuer
-/// sie gilt: eine eigene Konfigurationsdatei, die Hauptkonfiguration oder gar kein Panel.
+/// sie gilt: ein Profil derselben Datei, eine eigene Konfigurationsdatei, das Standardprofil oder gar kein Panel.
 /// </summary>
 public sealed class HostGroup
 {
@@ -174,8 +175,11 @@ public sealed class HostGroup
     /// <summary>Weitere Eintraege aus einer Textdatei (Pfad, UNC, URL; relativ zur Konfiguration), bei jedem Lauf frisch gelesen.</summary>
     public string? MatchFile { get; set; }
 
-    /// <summary>Konfigurationsdatei fuer diese Gruppe (Pfad, UNC, URL; relativ zur Hauptdatei). Leer = kein Panel.</summary>
+    /// <summary>Konfigurationsdatei fuer diese Gruppe (Pfad, UNC, URL; relativ zur Hauptdatei).</summary>
     public string? Config { get; set; }
+
+    /// <summary>Profil aus "profiles" derselben Datei fuer diese Gruppe. Ohne Profil und ohne Datei gilt das Standardprofil.</summary>
+    public string? Profile { get; set; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public HostGroupMode Mode { get; set; }
@@ -185,10 +189,14 @@ public sealed class HostGroup
     public List<string> MatchFromFile { get; set; } = new();
 
     [JsonIgnore]
-    public bool UsesOwnConfig => Mode == HostGroupMode.Auto && !string.IsNullOrWhiteSpace(Config);
+    public bool UsesOwnConfig => Mode != HostGroupMode.Exclude && !string.IsNullOrWhiteSpace(Config);
 
     [JsonIgnore]
-    public bool Excludes => Mode == HostGroupMode.Exclude || (Mode == HostGroupMode.Auto && string.IsNullOrWhiteSpace(Config));
+    public bool UsesProfile => Mode != HostGroupMode.Exclude && string.IsNullOrWhiteSpace(Config) && !string.IsNullOrWhiteSpace(Profile);
+
+    /// <summary>Kein Panel nur noch ausdruecklich ("mode": "Exclude"). Eine Gruppe ohne Profil und ohne Datei bekommt das Standardprofil.</summary>
+    [JsonIgnore]
+    public bool Excludes => Mode == HostGroupMode.Exclude;
 }
 
 public sealed class HostsConfig
@@ -240,7 +248,7 @@ public sealed class HostsConfig
         var front = new List<HostGroup>();
         if (hasExclude)
         {
-            front.Add(new HostGroup { Name = BlacklistName, Match = Normalize(Exclude ?? new()), MatchFile = ExcludeFile });
+            front.Add(new HostGroup { Name = BlacklistName, Match = Normalize(Exclude ?? new()), MatchFile = ExcludeFile, Mode = HostGroupMode.Exclude });
         }
         if (hasInclude)
         {
@@ -249,10 +257,26 @@ public sealed class HostsConfig
         Groups.InsertRange(0, front);
         if (hasInclude)
         {
-            Groups.Add(new HostGroup { Name = OthersName, Match = new() { "*" } });
+            Groups.Add(new HostGroup { Name = OthersName, Match = new() { "*" }, Mode = HostGroupMode.Exclude });
         }
         Include = Exclude = null;
         IncludeFile = ExcludeFile = null;
+    }
+
+    /// <summary>
+    /// Dateien vor Format 2 (bis Version 2.18): dort hiess eine Gruppe ohne Datei "kein Panel". Seit
+    /// 2.19 bekommt sie das Standardprofil - deshalb solche Gruppen beim Laden ausdruecklich auf
+    /// "Exclude" stellen, damit sich am Verhalten nichts aendert.
+    /// </summary>
+    public void UpgradeFromFormat1()
+    {
+        foreach (var group in Groups ?? new())
+        {
+            if (group.Mode == HostGroupMode.Auto && string.IsNullOrWhiteSpace(group.Config) && string.IsNullOrWhiteSpace(group.Profile))
+            {
+                group.Mode = HostGroupMode.Exclude;
+            }
+        }
     }
 
     /// <summary>Die erste Gruppe, auf die dieser Rechner passt, mit dem Eintrag, der gepasst hat - oder null.</summary>
@@ -278,7 +302,7 @@ public sealed class HostsConfig
         var group = FindGroup(hostNames, out var matchedBy);
         if (group is { Excludes: true })
         {
-            reason = $"steht in der Gruppe „{group.Name}“ ohne Konfiguration (passt auf \"{matchedBy}\")";
+            reason = $"steht in der Gruppe „{group.Name}“ ohne Panel (passt auf \"{matchedBy}\")";
             return false;
         }
         reason = "";
@@ -816,6 +840,155 @@ public sealed class AppConfig
     public const string FileName = "BGInfo-Reloaded.json";
     public const string EnvironmentVariable = "BGINFORELOADED_CONFIG";
 
+    /// <summary>Format der Datei: 2 = seit Version 2.19 (Profile; Gruppe ohne Angabe = Standardprofil).</summary>
+    public const int CurrentConfigFormat = 2;
+
+    /// <summary>Wird immer geschrieben - fehlt es beim Lesen, stammt die Datei aus einer aelteren Version.</summary>
+    [JsonPropertyOrder(-1)]
+    public int ConfigFormat { get; set; } = CurrentConfigFormat;
+
+    /// <summary>
+    /// Profile derselben Datei: je Name nur die Abweichungen vom Standardprofil (dieser Datei ohne
+    /// "profiles"). Einstellungsbloecke werden Wert fuer Wert ueberlagert, Listen ersetzt; "hosts"
+    /// und "profiles" gelten nur fuer die ganze Datei. Welches Profil ein Rechner bekommt, sagen die
+    /// Gruppen unter "hosts" ("profile").
+    /// </summary>
+    [JsonPropertyOrder(1)]
+    public Dictionary<string, JsonObject>? Profiles { get; set; }
+
+    /// <summary>Name des Profils, aus dem diese Konfiguration zusammengesetzt wurde - null = Standardprofil. Nur zur Laufzeit.</summary>
+    [JsonIgnore]
+    public string? ActiveProfile { get; set; }
+
+    /// <summary>Bloecke, die nur fuer die ganze Datei gelten und in einem Profil nicht vorkommen.</summary>
+    private static readonly string[] FileOnlyKeys = { "configFormat", "profiles", "hosts" };
+
+    /// <summary>Diese Konfiguration als JSON-Baum, wie sie gespeichert wuerde (ohne Kommentare).</summary>
+    public JsonObject ToNode() => JsonSerializer.SerializeToNode(this, JsonOptions)!.AsObject();
+
+    /// <summary>
+    /// Die Konfiguration fuer ein Profil: diese (das Standardprofil) mit den Abweichungen des Profils
+    /// ueberlagert. "hosts" bleibt die der Datei; das Ergebnis hat selbst keine Profile. Null, wenn es
+    /// das Profil nicht gibt.
+    /// </summary>
+    public AppConfig? WithProfile(string name)
+    {
+        var key = FindProfile(name);
+        if (key == null)
+        {
+            return null;
+        }
+        var node = ToNode();
+        foreach (var fileOnly in FileOnlyKeys)
+        {
+            node.Remove(fileOnly);
+        }
+        MergeInto(node, Profiles![key]);
+        var result = node.Deserialize<AppConfig>(JsonOptions)!;
+        result.BaseDirectory = BaseDirectory;
+        result.Hosts = Hosts;
+        result.Profiles = null;
+        result.ActiveProfile = key;
+        result.Fields ??= new();
+        result.Items ??= new();
+        result.Format ??= new();
+        result.Border ??= new();
+        return result;
+    }
+
+    /// <summary>Der Name, unter dem das Profil gespeichert ist (Gross-/Kleinschreibung egal) - oder null.</summary>
+    public string? FindProfile(string? name) =>
+        name == null ? null : Profiles?.Keys.FirstOrDefault(k => string.Equals(k, name, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Haelt <paramref name="effective"/> als Profil fest - gespeichert werden nur die Abweichungen von dieser Konfiguration.</summary>
+    public void StoreProfile(string name, AppConfig effective)
+    {
+        Profiles ??= new();
+        Profiles[FindProfile(name) ?? name] = Diff(effective.ToNode(), ToNode());
+    }
+
+    /// <summary>Zeilen des Panels als JSON - fuer die Zwischenablage des Editors.</summary>
+    public static string ItemsToJson(IEnumerable<ItemConfig> items) => JsonSerializer.Serialize(items, JsonOptions);
+
+    /// <summary>Gegenstueck zu <see cref="ItemsToJson"/>; null, wenn der Text keine Zeilen enthaelt.</summary>
+    public static List<ItemConfig>? ItemsFromJson(string json)
+    {
+        try
+        {
+            var text = json.Trim();
+            return text.StartsWith('{')
+                ? new List<ItemConfig> { JsonSerializer.Deserialize<ItemConfig>(text, JsonOptions)! }
+                : text.StartsWith('[') ? JsonSerializer.Deserialize<List<ItemConfig>>(text, JsonOptions) : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Ueberlagert <paramref name="target"/> mit <paramref name="overlay"/>: Bloecke der obersten Ebene
+    /// ("panel", "fields" ...) Wert fuer Wert, deren Werte und alles andere (auch Listen) als Ganzes.
+    /// </summary>
+    public static void MergeInto(JsonObject target, JsonObject overlay, bool topLevel = true)
+    {
+        foreach (var (key, value) in overlay)
+        {
+            if (topLevel && FileOnlyKeys.Contains(key, StringComparer.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+            var existingKey = target.Select(pair => pair.Key).FirstOrDefault(k => string.Equals(k, key, StringComparison.OrdinalIgnoreCase)) ?? key;
+            if (topLevel && value is JsonObject inner && target[existingKey] is JsonObject current)
+            {
+                MergeInto(current, inner, topLevel: false);
+            }
+            else
+            {
+                target[existingKey] = value?.DeepClone();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Was <paramref name="effective"/> von <paramref name="baseline"/> unterscheidet - das, was in einem
+    /// Profil stehen muss. Bloecke der obersten Ebene werden Wert fuer Wert verglichen (so, wie
+    /// <see cref="MergeInto"/> sie ueberlagert), alles andere als Ganzes; ein Wert, der im Standard
+    /// steht, im Profil aber fehlt, wird als null festgehalten.
+    /// </summary>
+    public static JsonObject Diff(JsonObject effective, JsonObject baseline, bool topLevel = true)
+    {
+        var result = new JsonObject();
+        foreach (var (key, value) in effective)
+        {
+            if (topLevel && FileOnlyKeys.Contains(key, StringComparer.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+            var other = baseline[key];
+            if (topLevel && value is JsonObject inner && other is JsonObject innerBase)
+            {
+                var nested = Diff(inner, innerBase, topLevel: false);
+                if (nested.Count > 0)
+                {
+                    result[key] = nested;
+                }
+            }
+            else if (!JsonNode.DeepEquals(value, other))
+            {
+                result[key] = value?.DeepClone();
+            }
+        }
+        foreach (var (key, _) in baseline)
+        {
+            if (!(topLevel && FileOnlyKeys.Contains(key, StringComparer.OrdinalIgnoreCase)) && !effective.ContainsKey(key))
+            {
+                result[key] = null;
+            }
+        }
+        return result;
+    }
+
     /// <summary>Frei waehlbare Version der Konfigurationsdatei; im Panel als {configversion} nutzbar.</summary>
     public string? Version { get; set; }
 
@@ -1054,11 +1227,37 @@ public sealed class AppConfig
         {
             (config, source) = groupConfig;
         }
+        else if (config.ResolveGroupProfile() is { } profiled)
+        {
+            config = profiled;
+            source = $"{source} (Profil {profiled.ActiveProfile})";
+        }
         if (config.ResolveInclude() is { } note)
         {
             Console.WriteLine(note);
         }
         return (config, source);
+    }
+
+    /// <summary>
+    /// Faellt dieser Rechner in eine Gruppe mit Profil, die Konfiguration fuer dieses Profil; null,
+    /// wenn das Standardprofil gilt. Ein unbekannter Profilname ergibt eine Warnung und das Standardprofil.
+    /// </summary>
+    public AppConfig? ResolveGroupProfile()
+    {
+        var hostNames = new[] { Environment.MachineName, new ValueResolver().Expand("{fqdn}") };
+        var group = Hosts.FindGroup(hostNames, out var matchedBy);
+        if (group is not { UsesProfile: true })
+        {
+            return null;
+        }
+        if (WithProfile(group.Profile!) is { } profiled)
+        {
+            Console.WriteLine($"Gruppe „{group.Name}“ (passt auf \"{matchedBy}\"): Profil {profiled.ActiveProfile}");
+            return profiled;
+        }
+        Console.WriteLine($"Warnung: Gruppe „{group.Name}“ verweist auf das Profil '{group.Profile}', das es in dieser Datei nicht gibt - verwende das Standardprofil.");
+        return null;
     }
 
     /// <summary>
@@ -1394,12 +1593,32 @@ public sealed class AppConfig
             config.Format ??= new();
             config.Border ??= new();
             config.Hosts ??= new();
+            if (!HasTopLevelKey(json, "configFormat"))
+            {
+                // Datei aus einer Version vor den Profilen: Gruppen ohne Datei hiessen "kein Panel".
+                config.Hosts.UpgradeFromFormat1();
+            }
+            config.ConfigFormat = CurrentConfigFormat;
             config.Hosts.MigrateLegacyLists();
             return config;
         }
         catch (JsonException ex)
         {
             throw new InvalidOperationException($"Konfiguration '{source}' ist kein gueltiges JSON: {ex.Message}");
+        }
+    }
+
+    private static bool HasTopLevelKey(string json, string key)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json, new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                && document.RootElement.EnumerateObject().Any(property => string.Equals(property.Name, key, StringComparison.OrdinalIgnoreCase));
+        }
+        catch (JsonException)
+        {
+            return false;
         }
     }
 

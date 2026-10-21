@@ -25,6 +25,7 @@ internal static class ConfigWriter
     /// <summary>Erlaeuterung hinter einer Einstellung, Schluessel = Pfad ("panel.margin").</summary>
     private static readonly Dictionary<string, string> Trailing = new(StringComparer.OrdinalIgnoreCase)
     {
+        ["configFormat"] = "Format dieser Datei - nicht ändern (2 = mit Profilen; Gruppe ohne Angabe = Standardprofil)",
         ["version"] = "frei wählbare Version dieser Datei, als {configversion} im Panel nutzbar",
         ["description"] = "eigene Anmerkungen zu dieser Datei (bleiben beim Speichern erhalten)",
         ["include"] = "zentrale Datei (Pfad, UNC, URL) mit gemeinsam genutzten \"fields\" und \"items\"",
@@ -65,7 +66,7 @@ internal static class ConfigWriter
         ["hosts.exclude"] = "Blacklist: auf passenden Rechnern kein Panel - hat Vorrang; Einträge wie bei include",
         ["hosts.includeFile"] = "Textdatei (Pfad, UNC, URL) mit weiteren Whitelist-Einträgen, ein Eintrag je Zeile; wird bei jedem Lauf gelesen",
         ["hosts.excludeFile"] = "Textdatei (Pfad, UNC, URL) mit weiteren Blacklist-Einträgen, ein Eintrag je Zeile; wird bei jedem Lauf gelesen",
-        ["hosts.groups"] = "Rechnergruppen, von oben nach unten geprüft - die erste passende entscheidet: \"config\" = eigene Datei, ohne \"config\" = kein Panel (Blacklist), \"mode\": \"ThisConfig\" = diese Datei. \"match\": Namen mit * und ? an jeder Stelle (*-ts-*, mh-??-xama), Groß-/Kleinschreibung egal, IP (10.1.1.5), Netz (10.1.0.0/16), Bereich (10.1.1.10-50); \"matchFile\": Liste aus einer Datei",
+        ["hosts.groups"] = "Rechnergruppen, von oben nach unten geprüft - die erste passende entscheidet: \"profile\" = Profil aus \"profiles\", \"config\" = eigene Datei, ohne beides = Standardprofil, \"mode\": \"Exclude\" = kein Panel. \"match\": Namen mit * und ? an jeder Stelle (*-ts-*, mh-??-xama), Groß-/Kleinschreibung egal, IP (10.1.1.5), Netz (10.1.0.0/16), Bereich (10.1.1.10-50); \"matchFile\": Liste aus einer Datei",
         ["hosts.onExcluded"] = "BackgroundOnly = Hintergrund ohne Panel setzen, Skip = Wallpaper nicht anfassen",
         ["border.color"] = "Rahmenfarbe (#RRGGBBAA)",
         ["border.width"] = "Strichstärke in Pixeln, 0 = kein Rahmen",
@@ -100,6 +101,12 @@ internal static class ConfigWriter
             "\"bar\" zeichnet einen Balken aus einem Prozentwert: \"{percent}\" bei \"drives\", \"{rampercent}\", \"{battery}\" - mit Text darunter, ohne Text statt des Werts.",
             "Block: { \"block\": \"Name\", \"when\": \"{virtual} = nein\" } ... { \"endBlock\": true } - der Inhalt erscheint nur, wenn der Filter zutrifft.",
             "Platzhalter mit aktuellen Werten: BGInfo-Reloaded.exe --list-tags   Kürzen: {cpu,30}  {cpu,30...}  {serial,-8}"
+        },
+        ["profiles"] = new[]
+        {
+            "Profile: je Name nur die Abweichungen vom Standardprofil (alles oberhalb). Blöcke wie \"panel\" werden Wert für Wert",
+            "überlagert, \"fields\" je Feld, Listen wie \"items\" ganz ersetzt; null = Wert des Standardprofils entfernen.",
+            "Welcher Rechner welches Profil bekommt, steht in \"hosts\" -> \"groups\" (\"profile\": \"Name\")."
         }
     };
 
@@ -110,6 +117,7 @@ internal static class ConfigWriter
     private static readonly string[] FormerComments =
     {
         "GitHub-Repository (owner/name) für --update aus Releases; nur auf Aufruf, nie automatisch",
+        "Rechnergruppen, von oben nach unten geprüft - die erste passende entscheidet: \"config\" = eigene Datei, ohne \"config\" = kein Panel (Blacklist), \"mode\": \"ThisConfig\" = diese Datei. \"match\": Namen mit * und ? an jeder Stelle (*-ts-*, mh-??-xama), Groß-/Kleinschreibung egal, IP (10.1.1.5), Netz (10.1.0.0/16), Bereich (10.1.1.10-50); \"matchFile\": Liste aus einer Datei",
         "  BGInfo-Reloaded.exe --config \\\\server\\share\\BGInfo-Reloaded.json   (bzw. https://...)",
         "Whitelist: wenn nicht leer, Panel nur auf passenden Rechnern (* und ? erlaubt)",
         "Blacklist: auf passenden Rechnern kein Panel - hat Vorrang",
@@ -191,7 +199,54 @@ internal static class ConfigWriter
                 }
             }
 
-            if (value is JsonObject section && section.Count > 0)
+            if (value is JsonObject profiles && profiles.Count > 0 && name.Equals("profiles", StringComparison.OrdinalIgnoreCase))
+            {
+                // Je Profil wie oben: ein Wert je Zeile, eine Panel-Zeile je Zeile.
+                text.AppendLine($"  {Quote(name)}: {{");
+                var all = profiles.ToList();
+                for (var p = 0; p < all.Count; p++)
+                {
+                    var profileComma = p < all.Count - 1 ? "," : "";
+                    if (all[p].Value is not JsonObject profile || profile.Count == 0)
+                    {
+                        text.AppendLine($"    {Quote(all[p].Key)}: {Compact(all[p].Value, compact)}{profileComma}");
+                        continue;
+                    }
+                    text.AppendLine($"    {Quote(all[p].Key)}: {{");
+                    var keys = profile.ToList();
+                    for (var k = 0; k < keys.Count; k++)
+                    {
+                        var (key, part) = keys[k];
+                        var keyComma = k < keys.Count - 1 ? "," : "";
+                        if (part is JsonObject block && block.Count > 0)
+                        {
+                            text.AppendLine($"      {Quote(key)}: {{");
+                            var entries = block.ToList();
+                            for (var e = 0; e < entries.Count; e++)
+                            {
+                                text.AppendLine($"        {Quote(entries[e].Key)}: {Compact(entries[e].Value, compact)}{(e < entries.Count - 1 ? "," : "")}");
+                            }
+                            text.AppendLine($"      }}{keyComma}");
+                        }
+                        else if (part is JsonArray list && list.Count > 0)
+                        {
+                            text.AppendLine($"      {Quote(key)}: [");
+                            for (var e = 0; e < list.Count; e++)
+                            {
+                                text.AppendLine($"        {Row(list[e], compact)}{(e < list.Count - 1 ? "," : "")}");
+                            }
+                            text.AppendLine($"      ]{keyComma}");
+                        }
+                        else
+                        {
+                            text.AppendLine($"      {Quote(key)}: {Compact(part, compact)}{keyComma}");
+                        }
+                    }
+                    text.AppendLine($"    }}{profileComma}");
+                }
+                text.AppendLine($"  }}{comma}");
+            }
+            else if (value is JsonObject section && section.Count > 0)
             {
                 text.AppendLine($"  {Quote(name)}: {{");
                 var children = section.ToList();
@@ -231,10 +286,7 @@ internal static class ConfigWriter
                     {
                         depth++;
                     }
-                    var cells = rows[j] is JsonObject row
-                        ? "{ " + string.Join(", ", row.Select(cell => $"{Quote(cell.Key)}: {Compact(cell.Value, compact)}")) + " }"
-                        : Compact(rows[j], compact);
-                    text.AppendLine($"{indent}{cells}{(j < rows.Count - 1 ? "," : "")}");
+                    text.AppendLine($"{indent}{Row(rows[j], compact)}{(j < rows.Count - 1 ? "," : "")}");
                 }
                 text.AppendLine($"  ]{comma}");
             }
@@ -259,6 +311,11 @@ internal static class ConfigWriter
     }
 
     private static string Quote(string name) => JsonSerializer.Serialize(name);
+
+    /// <summary>Eine Zeile des Panels (oder ein anderer Listeneintrag) in einer Textzeile.</summary>
+    private static string Row(JsonNode? node, JsonSerializerOptions compact) => node is JsonObject row
+        ? "{ " + string.Join(", ", row.Select(cell => $"{Quote(cell.Key)}: {Compact(cell.Value, compact)}")) + " }"
+        : Compact(node, compact);
 
     private static string Compact(JsonNode? node, JsonSerializerOptions options) =>
         node == null ? "null" : node.ToJsonString(options).Replace("\",\"", "\", \"");

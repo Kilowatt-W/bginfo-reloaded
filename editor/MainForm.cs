@@ -25,7 +25,7 @@ internal static class EditorProgram
 /// Alle Eingabefelder haengen ueber kleine get/set-Funktionen direkt am <see cref="AppConfig"/>-Objekt;
 /// gespeichert wird mit derselben Serialisierung, die auch --export-config benutzt.
 /// </summary>
-public sealed class MainForm : Form
+public sealed partial class MainForm : Form
 {
     private const string AppTitle = "BGInfo-Reloaded Editor";
 
@@ -94,6 +94,7 @@ public sealed class MainForm : Form
 
     public MainForm(string? fileToOpen)
     {
+        _root = _config;
         AutoScaleDimensions = new SizeF(96F, 96F);
         AutoScaleMode = AutoScaleMode.Dpi;
         Font = SystemFonts.MessageBoxFont ?? Font;
@@ -220,6 +221,7 @@ public sealed class MainForm : Form
         // Reihenfolge zaehlt: das fuellende Element zuerst, die Leisten danach.
         Controls.Add(_split);
         Controls.Add(BuildToolbar());
+        Controls.Add(_profileStrip); // nach der Leiste hinzugefuegt, damit es darunter liegt; nur in einem Profil sichtbar
         Controls.Add(_previewHostNote); // liegt ueber der Fusszeile
         Controls.Add(status);
 
@@ -321,6 +323,8 @@ public sealed class MainForm : Form
         }));
         bar.Items.Add(Button("Speichern", '\uE74E', "In die geöffnete Datei speichern", () => Save(false)));
         bar.Items.Add(Button("Speichern unter…", '\uE792', "In eine neue Datei speichern", () => Save(true)));
+        bar.Items.Add(new ToolStripSeparator());
+        AddProfileTools(bar, iconSize);
         bar.Items.Add(new ToolStripSeparator());
         var previewToggle = Button("Vorschau", '\uE7B3', "Vorschaubereich rechts ein- oder ausblenden (ausgeblendet wird auch nicht gerendert)", () => { });
         previewToggle.CheckOnClick = true;
@@ -548,6 +552,31 @@ public sealed class MainForm : Form
             {
                 RemoveItem();
                 e.Handled = e.SuppressKeyPress = true;
+            }
+            else if (e.Control && e.KeyCode == Keys.C)
+            {
+                CopyItems();
+                e.Handled = e.SuppressKeyPress = true;
+            }
+            else if (e.Control && e.KeyCode == Keys.V)
+            {
+                PasteItems();
+                e.Handled = e.SuppressKeyPress = true;
+            }
+        };
+        // Kopieren zwischen Profilen und Editorfenstern; ein Blockanfang nimmt den ganzen Block mit.
+        var itemMenu = new ContextMenuStrip();
+        itemMenu.Items.Add("Zeile kopieren (Strg+C)", null, (_, _) => CopyItems());
+        itemMenu.Items.Add("Einfügen (Strg+V)", null, (_, _) => PasteItems());
+        itemMenu.Items.Add(CopyToProfileMenu("In Profil kopieren", CopyItemsToProfile));
+        _items.ContextMenuStrip = itemMenu;
+        _items.MouseDown += (_, e) =>
+        {
+            // Rechtsklick markiert die Zeile darunter, damit das Menue fuer sie gilt.
+            var index = _items.IndexFromPoint(e.Location);
+            if (e.Button == MouseButtons.Right && index >= 0)
+            {
+                _items.SelectedIndex = index;
             }
         };
         _itemLabel.Enter += (_, _) => _lastItemTextBox = _itemLabel;
@@ -882,12 +911,13 @@ public sealed class MainForm : Form
     {
         var table = NewFormTable();
 
-        Heading(table, "Rechnergruppen – welche Rechner welche Konfiguration bekommen");
+        Heading(table, "Rechnergruppen – welche Rechner welches Profil bekommen");
         Row(table, "", Hint("Die Gruppen werden von oben nach unten geprüft; die erste, auf die ein Rechner passt, entscheidet:\r\n" +
+            "• Profil – ein Profil dieser Datei (oben in der Leiste „Profil“): nur seine Abweichungen, alles Übrige aus dem Standardprofil\r\n" +
+            "• Standardprofil – diese Datei ohne Profil (wie früher die Whitelist)\r\n" +
             "• eigene Konfigurationsdatei – sie gilt für diese Rechner vollständig (Inhalt, Aussehen, Hintergrund)\r\n" +
-            "• diese Konfiguration – wie früher die Whitelist\r\n" +
-            "• ohne Konfiguration – kein Panel (wie früher die Blacklist)\r\n" +
-            "Rechner, die in keiner Gruppe stehen, bekommen diese Konfiguration."));
+            "• kein Panel – wie früher die Blacklist\r\n" +
+            "Rechner, die in keiner Gruppe stehen, bekommen das Standardprofil."));
 
         _groups.Columns.Add("Gruppe", LogicalToDeviceUnits(150));
         _groups.Columns.Add("Rechner / IP-Bereiche", LogicalToDeviceUnits(330));
@@ -896,10 +926,11 @@ public sealed class MainForm : Form
         _groups.DoubleClick += (_, _) => EditGroup(false);
         _loaders.Add(RefreshGroups);
 
-        var buttons = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
+        // Umbrechen statt rechts abschneiden: nicht breiter als die Tabelle darueber.
+        var buttons = new FlowLayoutPanel { AutoSize = true, WrapContents = true, MaximumSize = new Size(_groups.Width, 0), Margin = Padding.Empty };
         void GroupButton(string text, string tip, Action action)
         {
-            var button = new Button { Text = text, AutoSize = true, Margin = new Padding(0, 0, 6, 0) };
+            var button = new Button { Text = text, AutoSize = true, Margin = new Padding(0, 0, 6, 6) };
             button.Click += (_, _) => action();
             _tips.SetToolTip(button, tip);
             buttons.Controls.Add(button);
@@ -909,7 +940,8 @@ public sealed class MainForm : Form
         GroupButton("Entfernen", "Die markierte Gruppe entfernen (Dateien werden nicht gelöscht)", RemoveGroup);
         GroupButton("▲", "Nach oben – wird früher geprüft", () => MoveGroup(-1));
         GroupButton("▼", "Nach unten – wird später geprüft", () => MoveGroup(1));
-        GroupButton("Konfiguration der Gruppe öffnen", "Die Konfigurationsdatei der markierten Gruppe im Editor öffnen; gibt es sie noch nicht, als Kopie dieser Konfiguration anlegen", OpenGroupConfig);
+        GroupButton("Profil / Datei der Gruppe öffnen", "Das Profil der markierten Gruppe zum Bearbeiten wählen – bzw. ihre Konfigurationsdatei im Editor öffnen; gibt es die Datei noch nicht, als Kopie dieser Konfiguration anlegen", OpenGroupConfig);
+        GroupButton("Datei als Profil übernehmen…", "Die Einstellungen aus der Konfigurationsdatei der markierten Gruppe als Profil in diese Datei holen\r\n(nur die Abweichungen vom Standardprofil) und die Gruppe von der Datei auf das Profil umstellen.\r\nDie Datei selbst bleibt unverändert.", ImportGroupFile);
         Row(table, "", _groups);
         Row(table, "", buttons);
         Row(table, "", Hint("Einträge einer Gruppe: Rechnername mit Platzhaltern – * = beliebig viele Zeichen, ? = genau ein Zeichen, an jeder Stelle und auch mehrfach:\r\n" +
@@ -917,6 +949,8 @@ public sealed class MainForm : Form
             "Groß- und Kleinschreibung spielt keine Rolle: *-TS-* passt auch auf mh-ts-01.\r\n" +
             "IP-Adresse (10.10.1.5), Netz (10.10.0.0/16) oder Bereich (10.10.1.10-10.10.1.50, kurz 10.10.1.10-50).\r\n" +
             "Namen werden gegen Rechnername und voll qualifizierten Namen geprüft, IP-Angaben gegen alle IPv4-Adressen der aktiven Netzwerkadapter."));
+
+        BuildProfileList(table);
 
         Row(table, "Auf Rechnern ohne Panel", Combo(new[]
         {
@@ -928,10 +962,11 @@ public sealed class MainForm : Form
         return ScrollPage("Rechner", table);
     }
 
-    private static string DescribeGroupEffect(HostGroup group) =>
-        group.UsesOwnConfig ? $"eigene Konfiguration: {group.Config}"
-        : group.Excludes ? "kein Panel"
-        : "diese Konfiguration";
+    private string DescribeGroupEffect(HostGroup group) =>
+        group.Excludes ? "kein Panel"
+        : group.UsesOwnConfig ? $"eigene Konfiguration: {group.Config}"
+        : group.UsesProfile ? $"Profil {group.Profile}" + (_root.FindProfile(group.Profile) == null ? " (gibt es nicht – Standardprofil)" : "")
+        : "Standardprofil";
 
     /// <summary>Fuellt die Gruppenliste und sagt, in welche Gruppe dieser Rechner faellt (ohne die Listendateien zu lesen).</summary>
     private void RefreshGroups()
@@ -965,9 +1000,10 @@ public sealed class MainForm : Form
         var hostNames = new[] { Environment.MachineName, new ValueResolver().Expand("{fqdn}") };
         var mine = _config.Hosts.FindGroup(hostNames, out var matchedBy);
         _groupOfThisMachine.Text = $"Dieser Rechner heißt {Environment.MachineName}. " + (mine == null
-            ? "Er steht in keiner Gruppe und bekommt diese Konfiguration."
+            ? "Er steht in keiner Gruppe und bekommt das Standardprofil."
             : $"Er fällt in die Gruppe „{mine.Name}“ (passt auf \"{matchedBy}\"): {DescribeGroupEffect(mine)}.")
             + (_config.Hosts.Groups.Any(g => !string.IsNullOrWhiteSpace(g.MatchFile)) ? "\r\nEinträge aus Listendateien sind hier nicht berücksichtigt – die orange Zeile unten im Fenster prüft sie mit." : "");
+        RefreshProfileList(); // "Bekommen" haengt an den Gruppen
     }
 
     private HostGroup? SelectedGroup =>
@@ -1003,9 +1039,19 @@ public sealed class MainForm : Form
     /// <summary>Oeffnet die Konfigurationsdatei der markierten Gruppe; fehlt sie, wird sie auf Wunsch als Kopie dieser Konfiguration angelegt.</summary>
     private void OpenGroupConfig()
     {
+        if (SelectedGroup is { UsesProfile: true } profiled)
+        {
+            if (_root.FindProfile(profiled.Profile) == null)
+            {
+                _status.Text = $"Das Profil „{profiled.Profile}“ gibt es nicht – über „Profile“ → „Neues Profil…“ anlegen.";
+                return;
+            }
+            SwitchProfile(profiled.Profile);
+            return;
+        }
         if (SelectedGroup is not { UsesOwnConfig: true } group)
         {
-            _status.Text = "Die markierte Gruppe hat keine eigene Konfigurationsdatei.";
+            _status.Text = "Die markierte Gruppe hat weder ein Profil noch eine eigene Konfigurationsdatei.";
             return;
         }
         var source = Environment.ExpandEnvironmentVariables(group.Config!.Trim());
@@ -1065,11 +1111,17 @@ public sealed class MainForm : Form
         var effect = new ComboBox { Width = LogicalToDeviceUnits(420), DropDownStyle = ComboBoxStyle.DropDownList };
         effect.Items.AddRange(new object[]
         {
+            "Profil aus dieser Datei",
+            "Standardprofil (wie früher die Whitelist)",
             "Eigene Konfigurationsdatei für diese Rechner",
-            "Diese Konfiguration (wie früher die Whitelist)",
             "Kein Panel (wie früher die Blacklist)"
         });
-        effect.SelectedIndex = existing == null ? 0 : existing.UsesOwnConfig ? 0 : existing.Excludes ? 2 : 1;
+        effect.SelectedIndex = existing == null ? (_root.Profiles is { Count: > 0 } ? 0 : 1)
+            : existing.Excludes ? 3 : existing.UsesOwnConfig ? 2 : existing.UsesProfile ? 0 : 1;
+        // Eintippen geht auch: ein neuer Name wird beim OK als Profil angelegt.
+        var profile = new ComboBox { Width = LogicalToDeviceUnits(260), DropDownStyle = ComboBoxStyle.DropDown };
+        profile.Items.AddRange((_root.Profiles?.Keys ?? Enumerable.Empty<string>()).Cast<object>().ToArray());
+        profile.Text = existing?.Profile ?? (profile.Items.Count > 0 ? (string)profile.Items[0]! : "");
         var config = new TextBox { Width = LogicalToDeviceUnits(420), Text = existing?.Config ?? "", PlaceholderText = @"z. B. .\BGInfo-Server.json oder \\fileserver.example.com\share\bginfo\server.json" };
         var browseConfig = new Button { Text = "…", AutoSize = true };
         browseConfig.Click += (_, _) =>
@@ -1080,7 +1132,11 @@ public sealed class MainForm : Form
                 config.Text = ShortenPath(open.FileName, ConfigDirectory);
             }
         };
-        void SyncConfigField() => config.Enabled = browseConfig.Enabled = effect.SelectedIndex == 0;
+        void SyncConfigField()
+        {
+            config.Enabled = browseConfig.Enabled = effect.SelectedIndex == 2;
+            profile.Enabled = effect.SelectedIndex == 0;
+        }
         effect.SelectedIndexChanged += (_, _) => SyncConfigField();
         SyncConfigField();
 
@@ -1169,6 +1225,7 @@ public sealed class MainForm : Form
         }
         Line("Name der Gruppe", name);
         Line("Wirkung", effect);
+        Line("Profil", profile);
         Line("Konfigurationsdatei", config, browseConfig);
         Line("Rechner / IP-Bereiche\r\n(ein Eintrag je Zeile)", entries, entryButtons);
         Line("… zusätzlich aus Datei", listFile, browseList);
@@ -1197,31 +1254,39 @@ public sealed class MainForm : Form
                 MessageBox.Show(dialog, "Bitte einen Namen für die Gruppe angeben.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
                 continue;
             }
-            if (effect.SelectedIndex == 0 && string.IsNullOrWhiteSpace(config.Text))
+            if (effect.SelectedIndex == 2 && string.IsNullOrWhiteSpace(config.Text))
             {
                 MessageBox.Show(dialog, "Für „Eigene Konfigurationsdatei“ bitte eine Datei angeben – oder eine andere Wirkung wählen.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
                 continue;
+            }
+            var profileName = profile.Text.Trim();
+            if (effect.SelectedIndex == 0 && (profileName.Length == 0 || string.Equals(profileName, StandardProfileName, StringComparison.OrdinalIgnoreCase)))
+            {
+                MessageBox.Show(dialog, "Bitte ein Profil wählen oder einen neuen Namen eintippen – oder „Standardprofil“ als Wirkung wählen.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                continue;
+            }
+            if (effect.SelectedIndex == 0 && _root.FindProfile(profileName) == null)
+            {
+                if (MessageBox.Show(dialog, $"Das Profil „{profileName}“ gibt es noch nicht. Anlegen (zunächst wie das Standardprofil)?",
+                        AppTitle, MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+                {
+                    continue;
+                }
+                CommitProfile();
+                _root.Profiles ??= new();
+                _root.Profiles[profileName] = new System.Text.Json.Nodes.JsonObject();
+                RefreshProfiles();
             }
 
             var group = existing ?? new HostGroup();
             group.Name = name.Text.Trim();
             group.Match = TypedEntries();
             group.MatchFile = string.IsNullOrWhiteSpace(listFile.Text) ? null : listFile.Text.Trim();
-            switch (effect.SelectedIndex)
-            {
-                case 0:
-                    group.Mode = HostGroupMode.Auto;
-                    group.Config = config.Text.Trim();
-                    break;
-                case 1:
-                    group.Mode = HostGroupMode.ThisConfig;
-                    group.Config = null;
-                    break;
-                default:
-                    group.Mode = HostGroupMode.Auto;
-                    group.Config = null;
-                    break;
-            }
+            // Profil und Standardprofil als "ThisConfig": eine aeltere exe (vor 2.19) kennt keine Profile und
+            // nimmt dann wenigstens das Standardprofil - mit "Auto" ohne Datei zeigte sie gar kein Panel.
+            group.Mode = effect.SelectedIndex switch { 3 => HostGroupMode.Exclude, 2 => HostGroupMode.Auto, _ => HostGroupMode.ThisConfig };
+            group.Config = effect.SelectedIndex == 2 ? config.Text.Trim() : null;
+            group.Profile = effect.SelectedIndex == 0 ? _root.FindProfile(profileName) : null;
             if (existing == null)
             {
                 // Vor "Alle anderen" (ein einzelnes *) einfuegen - dahinter wuerde die Gruppe nie erreicht.
@@ -1397,6 +1462,9 @@ public sealed class MainForm : Form
         var fieldMenu = new ContextMenuStrip();
         fieldMenu.Items.Add("Felder kopieren (Strg+C)", null, (_, _) => CopyFields());
         fieldMenu.Items.Add("Felder einfügen (Strg+V)", null, (_, _) => PasteFields());
+        fieldMenu.Items.Add(CopyToProfileMenu("Felder in Profil kopieren", target => CopyFieldsToProfile(target,
+            _fields.SelectedCells.Cast<DataGridViewCell>().Select(cell => cell.OwningRow).Distinct().Where(row => !row.IsNewRow)
+                .Select(row => (row.Cells[0].Value as string ?? "").Trim().Trim('{', '}')).Where(_config.Fields.ContainsKey).ToList())));
         _fields.ContextMenuStrip = fieldMenu;
 
         var wmi = new Button { Text = "WMI-Abfrage in die Definition einfügen…", AutoSize = true };
@@ -2782,6 +2850,7 @@ public sealed class MainForm : Form
     {
         _dirty = true;
         SyncScaleToggle();
+        UpdateProfileStrip();
         UpdateTitle();
         SchedulePreview();
         ScheduleCurrentValues();
@@ -2808,7 +2877,7 @@ public sealed class MainForm : Form
 
     private void UpdateTitle()
     {
-        Text = $"{(_path != null ? Path.GetFileName(_path) : "Neue Konfiguration")}{(_dirty ? "*" : "")} – {AppTitle}"
+        Text = $"{(_path != null ? Path.GetFileName(_path) : "Neue Konfiguration")}{(_dirty ? "*" : "")}{(_profile != null ? $" – Profil {_profile}" : "")} – {AppTitle}"
             + (_displayInfo.Length > 0 ? $"   –   Bildschirm: {_displayInfo}" : "");
         // In der Fusszeile nur der Dateiname - der volle Pfad erscheint, wenn die Maus darauf zeigt.
         _fileLabel.Text = (_path != null ? Path.GetFileName(_path) : "Neue Konfiguration (noch nicht gespeichert)") + (_dirty ? "  •  geändert" : "");
@@ -3279,7 +3348,7 @@ public sealed class MainForm : Form
     {
         if (ConfirmDiscard())
         {
-            _config = new AppConfig();
+            SetRoot(new AppConfig());
             _path = null;
             _dirty = false;
             _fileHadComments = false;
@@ -3292,7 +3361,7 @@ public sealed class MainForm : Form
         try
         {
             var json = File.ReadAllText(file);
-            _config = AppConfig.FromJson(json, file);
+            SetRoot(AppConfig.FromJson(json, file));
             _path = file;
             _dirty = false;
             // Die Standardkommentare schreibt ToJson bei jedem Speichern neu. Eigene Kommentare kann die
@@ -3350,7 +3419,9 @@ public sealed class MainForm : Form
 
         try
         {
-            File.WriteAllText(target, _config.ToJson());
+            // Im Profil: dessen Abweichungen in die Datei, gespeichert wird immer die ganze Datei.
+            CommitProfile();
+            File.WriteAllText(target, _root.ToJson());
         }
         catch (Exception ex)
         {
@@ -3503,6 +3574,7 @@ public sealed class MainForm : Form
     {
         var generation = ++_previewGeneration;
         var json = _config.ToJson();
+        var profile = _profile;
         var baseDirectory = ConfigDirectory;
         try
         {
@@ -3510,6 +3582,7 @@ public sealed class MainForm : Form
             {
                 var config = AppConfig.FromJson(json, "Editor");
                 config.BaseDirectory = baseDirectory;
+                config.ActiveProfile = profile;
                 config.ResolveHostFiles();
                 return DescribeHostExclusion(config);
             });
@@ -3690,6 +3763,7 @@ public sealed class MainForm : Form
         var generation = ++_previewGeneration;
         // Als Text uebergeben: der Hintergrund-Thread arbeitet auf einer eigenen Kopie, waehrend hier weiter editiert wird.
         var json = _config.ToJson();
+        var profile = _profile;
         var file = Path.Combine(Path.GetTempPath(), $"BGInfo-Reloaded-Editor-preview-{Environment.ProcessId}-{generation}.jpg");
         _status.Text = "Vorschau wird gerendert…";
 
@@ -3702,6 +3776,7 @@ public sealed class MainForm : Form
             {
                 var config = AppConfig.FromJson(json, "Editor");
                 config.BaseDirectory = baseDirectory;
+                config.ActiveProfile = profile;
                 var includeNote = config.ResolveInclude();
                 // Auch die Listendateien nur auf der Kopie lesen - ihre Eintraege gehoeren nicht in die gespeicherte Datei.
                 var notes = config.ResolveHostFiles();
@@ -3772,6 +3847,7 @@ public sealed class MainForm : Form
     private async void ShowFullscreenPreview()
     {
         var json = _config.ToJson();
+        var profile = _profile;
         var baseDirectory = ConfigDirectory;
         var screen = Screen.FromControl(this);
         var monitors = WallpaperInterop.GetMonitors();
@@ -3787,6 +3863,7 @@ public sealed class MainForm : Form
             {
                 var config = AppConfig.FromJson(json, "Editor");
                 config.BaseDirectory = baseDirectory;
+                config.ActiveProfile = profile;
                 config.ResolveInclude();
                 config.ResolveHostFiles();
                 return RenderToFile(config, file, monitor);

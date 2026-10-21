@@ -27,8 +27,9 @@ Technische Hintergründe, Lizenzhinweise und der Vergleich zu PowerBGInfo stehen
   Dateien anzeigen.
 - **Zentral verteilbar** – Konfiguration von UNC-Share oder http(s)-URL, mit lokalem Cache für
   Rechner ohne Netzverbindung.
-- **Rechnergruppen** – Rechner nach Namensmuster (`*`, `?`) oder IP-Bereich zu Gruppen fassen; jede
-  Gruppe bekommt eine eigene Konfigurationsdatei, die Hauptkonfiguration oder gar kein Panel.
+- **Rechnergruppen und Profile** – Rechner nach Namensmuster (`*`, `?`) oder IP-Bereich zu Gruppen
+  fassen; jede Gruppe bekommt ein Profil derselben Datei (nur die Abweichungen vom Standardprofil),
+  das Standardprofil, eine eigene Konfigurationsdatei oder gar kein Panel.
 - **Autostart** – Scheduled Tasks bei Anmeldung und in festem Intervall, ohne Admin-Rechte.
 - **Fensterlos** – im Task-Betrieb erscheint kein Konsolenfenster.
 - **Logdatei** – jeder Lauf wird protokolliert, Fehler sind nachvollziehbar.
@@ -71,7 +72,18 @@ BGInfo-Reloaded-Editor.exe BGInfo-Reloaded.json      eine vorhandene Datei öffn
   Taskleiste, runde Ecken, Schatten, Farben, Deckkraft, Schrift.
 - **Hintergrund:** Bilddatei, Anpassung an die Auflösung, Bild je Auflösung, Verhalten bei mehreren
   Monitoren.
-- **Rechner:** Rechnergruppen mit eigener Konfiguration bzw. ohne Panel (früher White- und Blacklist).
+- **Rechner:** Rechnergruppen mit Profil, eigener Konfiguration bzw. ohne Panel (früher White- und
+  Blacklist).
+- **Profil (Auswahl in der Leiste):** welches Profil bearbeitet wird – siehe
+  [Profile](#profile-mehrere-konfigurationen-in-einer-datei-profiles). Im Profil zeigt eine blaue
+  Zeile unter der Leiste, worin es vom Standardprofil abweicht; „Abweichungen anzeigen…“ stellt
+  jede Einstellung dem Standardprofil gegenüber und setzt markierte wieder auf dessen Wert zurück.
+  Das Menü „Profile“ legt Profile an, benennt sie um, löscht sie und übernimmt andere
+  Konfigurationsdateien als Profile.
+- **Kopieren zwischen Profilen:** in der Zeilenliste kopiert Strg+C die markierte Zeile (ein
+  Blockanfang samt Block), Strg+V fügt sie ein – auch in einem anderen Profil oder Editorfenster.
+  Das Kontextmenü „In Profil kopieren“ hängt Zeilen direkt an ein anderes Profil an; in der
+  Feldtabelle gibt es dasselbe für Felder („Felder in Profil kopieren“).
 - **Datei und Felder:** Version und Beschreibung der Datei, zentrale Datei (`include`), eigene Felder.
 - **Autostart und Werkzeuge:** Autostart-Tasks einrichten und entfernen (Intervall, `--watch`),
   Vorschau als Bilddatei speichern, Logdatei und Datenordner öffnen.
@@ -298,8 +310,9 @@ Vorlage liegt in [BGInfo-Reloaded.sample.json](BGInfo-Reloaded.sample.json).
   },
   "hosts": {
     "groups": [                                  // Rechnergruppen, die erste passende entscheidet
-      { "name": "Blacklist", "match": ["KIOSK-*", "PC-0??"] },                  // ohne "config": kein Panel
-      { "name": "Server", "match": ["SRV-*"], "config": ".\\BGInfo-Server.json" } // eigene Konfiguration
+      { "name": "Kiosk", "match": ["KIOSK-*", "PC-0??"], "mode": "Exclude" },   // kein Panel
+      { "name": "Server", "match": ["SRV-*"], "profile": "Server" },              // Profil aus "profiles"
+      { "name": "Labor", "match": ["LAB-*"], "config": ".\\BGInfo-Labor.json" }  // eigene Konfiguration
     ],
     "onExcluded": "BackgroundOnly"               // oder "Skip"
   },
@@ -547,18 +560,18 @@ Arial oder Verdana ausgewichen. Backslashes müssen in JSON verdoppelt werden (`
 
 ### Rechnergruppen: wer welche Konfiguration bekommt (`hosts`)
 
-Mit einer zentralen Konfiguration lässt sich steuern, welche Rechner welche Konfiguration bekommen
-– und welche gar kein Panel. Dafür gibt es Gruppen, die von oben nach unten geprüft werden. Die
-erste Gruppe, auf die ein Rechner passt, entscheidet:
+Mit einer zentralen Konfiguration lässt sich steuern, welche Rechner welches Profil bzw. welche
+Konfiguration bekommen – und welche gar kein Panel. Dafür gibt es Gruppen, die von oben nach unten
+geprüft werden. Die erste Gruppe, auf die ein Rechner passt, entscheidet:
 
 ```jsonc
 "hosts": {
   "groups": [
-    { "name": "Blacklist",  "match": ["KIOSK-*", "10.10.99.0/24"] },                                   // ohne "config": kein Panel
-    { "name": "Server",     "match": ["SRV-*", "10.10.20.0/24"], "config": ".\\BGInfo-Server.json" },   // eigene Datei
+    { "name": "Kiosk",      "match": ["KIOSK-*", "10.10.99.0/24"], "mode": "Exclude" },                 // kein Panel
+    { "name": "Server",     "match": ["SRV-*", "10.10.20.0/24"], "profile": "Server" },                // Profil dieser Datei
     { "name": "Notebooks",  "matchFile": "\\\\fileserver.example.com\\share\\bginfo\\notebooks.txt",
-                            "config": "\\\\fileserver.example.com\\share\\bginfo\\notebook.json" },
-    { "name": "Verwaltung", "match": ["VW-*"], "mode": "ThisConfig" }                                  // diese Konfiguration
+                            "config": "\\\\fileserver.example.com\\share\\bginfo\\notebook.json" },    // eigene Datei
+    { "name": "Verwaltung", "match": ["VW-*"] }                                                        // Standardprofil
   ],
   "onExcluded": "BackgroundOnly"
 }
@@ -569,17 +582,21 @@ erste Gruppe, auf die ein Rechner passt, entscheidet:
 | `name` | frei wählbar, erscheint im Log und im Editor |
 | `match` | Rechnernamen und IP-Angaben der Gruppe (siehe unten) |
 | `matchFile` | weitere Einträge aus einer Textdatei (Pfad, UNC, URL; relativ zur Konfigurationsdatei), bei jedem Lauf frisch gelesen |
+| `profile` | ein Profil aus `profiles` derselben Datei (siehe [Profile](#profile-mehrere-konfigurationen-in-einer-datei-profiles)) |
 | `config` | Konfigurationsdatei für diese Rechner (Pfad, UNC, URL; relativ zur Hauptdatei). Sie gilt für die Gruppe vollständig: Inhalt, Aussehen, Hintergrund |
-| ohne `config` | kein Panel – die frühere Blacklist |
-| `"mode": "ThisConfig"` | die Rechner der Gruppe bekommen diese (Haupt-)Konfiguration – die frühere Whitelist |
-| `"mode": "Exclude"` | kein Panel, auch wenn eine Datei eingetragen ist |
+| weder `profile` noch `config` | das Standardprofil – diese Datei ohne Profil (wie früher die Whitelist) |
+| `"mode": "Exclude"` | kein Panel (die frühere Blacklist), auch wenn ein Profil oder eine Datei eingetragen ist |
+| `"mode": "ThisConfig"` | wie ohne Angabe; der Editor schreibt es bei Profil und Standardprofil dazu, damit Versionen vor 2.19 (sie kennen keine Profile) wenigstens das Standardprofil nehmen |
 | `onExcluded` | Was auf Rechnern ohne Panel passiert: `BackgroundOnly` (Standard) setzt den Hintergrund wie konfiguriert, nur ohne Panel – das entfernt auch ein früher gesetztes Panel. `Skip` lässt das Wallpaper völlig unangetastet. |
 
-- Rechner, die in keiner Gruppe stehen, bekommen die Hauptkonfiguration.
-- Die Reihenfolge entscheidet: steht ein Rechner in zwei Gruppen, gilt die obere. Eine Gruppe ohne
-  Konfiguration ganz oben wirkt deshalb wie eine Blacklist mit Vorrang.
-- Ein `*` als einziger Eintrag passt auf alle Rechner. Als letzte Gruppe ohne `config` heißt das:
-  alle übrigen Rechner bekommen kein Panel (so wirkte früher eine Whitelist).
+- Rechner, die in keiner Gruppe stehen, bekommen das Standardprofil.
+- Die Reihenfolge entscheidet: steht ein Rechner in zwei Gruppen, gilt die obere. Eine Gruppe mit
+  `"mode": "Exclude"` ganz oben wirkt deshalb wie eine Blacklist mit Vorrang.
+- Ein `*` als einziger Eintrag passt auf alle Rechner. Als letzte Gruppe mit `"mode": "Exclude"`
+  heißt das: alle übrigen Rechner bekommen kein Panel (so wirkte früher eine Whitelist).
+- **Dateien vor Version 2.19** (ohne `"configFormat": 2`): dort bedeutete eine Gruppe ohne `config`
+  „kein Panel“. Beim Lesen solcher Dateien bleibt das so – die Gruppen werden als
+  `"mode": "Exclude"` behandelt und beim nächsten Speichern so geschrieben.
 - In der Datei einer Gruppe werden `groups` nicht ausgewertet – die Zuordnung trifft allein die
   Hauptdatei, es gibt keine Verschachtelung.
 - Ist die Datei einer Gruppe nicht erreichbar, gilt die zuletzt gelesene Fassung aus dem lokalen
@@ -598,9 +615,15 @@ Hat ein Rechner mehrere Adressen, genügt ein Treffer. Unterstützt wird IPv4. E
 zusätzlich gegen die Adressen als Text geprüft, `10.10.*` funktioniert also auch.
 
 **Im Editor (Reiter „Rechner“):** eine Tabelle zeigt die Gruppen mit Einträgen und Wirkung. Gruppen
-lassen sich hinzufügen, ändern, entfernen und in der Reihenfolge verschieben; „Konfiguration der
-Gruppe öffnen“ öffnet deren Datei und legt sie, wenn es sie noch nicht gibt, als Kopie der
-geöffneten Konfiguration an. Im Dialog einer Gruppe gibt es „Importieren…“ und „Exportieren…“ für
+lassen sich hinzufügen, ändern, entfernen und in der Reihenfolge verschieben. Als Wirkung gibt es
+„Profil aus dieser Datei“ (ein neuer Name legt das Profil an), „Standardprofil“, „Eigene
+Konfigurationsdatei“ und „Kein Panel“. „Profil / Datei der Gruppe öffnen“ wählt das Profil der
+Gruppe zum Bearbeiten bzw. öffnet ihre Datei und legt sie, wenn es sie noch nicht gibt, als Kopie
+der geöffneten Konfiguration an. „Datei als Profil übernehmen…“ holt die Datei der markierten Gruppe
+als Profil in die geöffnete Datei und stellt die Gruppe von der Datei auf das Profil um (siehe
+[Profile](#profile-mehrere-konfigurationen-in-einer-datei-profiles)). Darunter listet „Profile
+dieser Datei“ alle Profile mit ihren Abweichungen und den Gruppen, die sie bekommen; dort lassen
+sie sich bearbeiten, anlegen, umbenennen und löschen. Im Dialog einer Gruppe gibt es „Importieren…“ und „Exportieren…“ für
 die Einträge: eine Textdatei mit einem Eintrag je Zeile (auch durch Komma oder Semikolon getrennt);
 Leerzeilen und Zeilen, die mit `#` oder `//` beginnen, werden übergangen, Doppelte entfernt. Unter
 der Tabelle steht, in welche Gruppe der eigene Rechner fällt.
@@ -613,13 +636,79 @@ anderen Personen gepflegt wird als die Konfiguration.
 
 **Früheres Format:** bis Version 2.14 gab es getrennte Listen `include`/`exclude` (samt
 `includeFile`/`excludeFile`). Solche Dateien werden weiter gelesen: aus der Blacklist wird die
-Gruppe „Blacklist“ ganz oben, aus der Whitelist die Gruppe „Whitelist“ mit `"mode": "ThisConfig"`,
-gefolgt von „Alle anderen“ ohne Panel. Beim Speichern im Editor stehen danach nur noch Gruppen in
+Gruppe „Blacklist“ ganz oben (`"mode": "Exclude"`), aus der Whitelist die Gruppe „Whitelist“ mit
+`"mode": "ThisConfig"`, gefolgt von „Alle anderen“ ohne Panel. Beim Speichern im Editor stehen danach nur noch Gruppen in
 der Datei.
 
 Ob und warum ein Rechner kein Panel bekommt oder welche Gruppendatei gilt, steht in der Ausgabe und
 im Log (`Info-Panel auf diesem Rechner abgeschaltet: …`, `Gruppe „…“ (passt auf …): verwende …`).
 Bei `Skip` bleibt ein früher gesetztes Panel stehen, bis das Wallpaper anderweitig geändert wird.
+
+### Profile: mehrere Konfigurationen in einer Datei (`profiles`)
+
+Statt für jede Gruppe eine eigene Datei zu pflegen, können die Varianten als Profile in derselben
+`BGInfo-Reloaded.json` stehen. Alles außerhalb von `profiles` ist das **Standardprofil**; ein Profil
+enthält nur, **was davon abweicht**. Ändert sich das Standardprofil, ziehen alle Profile mit, soweit
+sie den Wert nicht selbst festlegen.
+
+```jsonc
+{
+  "configFormat": 2,
+  "panel": { "position": "TopRight" },
+  "fields": { "abteilung": "IT" },
+  "items": [ { "label": "Rechner", "value": "{hostname}" }, { "label": "Abteilung", "value": "{abteilung}" } ],
+  "hosts": {
+    "groups": [ { "name": "Server", "match": ["SRV-*"], "profile": "Server" } ]
+  },
+  "profiles": {
+    "Server": {
+      "panel": { "position": "BottomLeft" },            // nur dieser Wert weicht ab, der Rest von "panel" bleibt
+      "fields": { "abteilung": "Rechenzentrum" },       // je Feld
+      "items": [                                         // Listen werden ganz ersetzt
+        { "label": "Server", "value": "{hostname}" },
+        { "label": "OS", "value": "{os}" }
+      ]
+    }
+  }
+}
+```
+
+- Blöcke wie `panel`, `colors`, `font`, `wallpaper`, `format`, `border` werden **Wert für Wert**
+  überlagert, `fields` **je Feld**. Listen wie `items` und alle übrigen Werte ersetzt das Profil als
+  Ganzes. `null` nimmt einen Wert des Standardprofils heraus (z. B. `"include": null`).
+- `hosts` und `profiles` gelten nur für die ganze Datei und werden in einem Profil übergangen.
+- Welcher Rechner welches Profil bekommt, steht in den Gruppen (`"profile": "Name"`, Groß- und
+  Kleinschreibung egal). Gibt es das Profil nicht, steht eine Warnung im Log, und es gilt das
+  Standardprofil.
+- `configFormat` schreibt das Programm selbst; es zeigt, dass die Datei schon die Bedeutung ab
+  Version 2.19 hat (Gruppe ohne Angabe = Standardprofil).
+- Ältere Programmversionen kennen keine Profile. Damit ein Rechner, der noch nicht aktualisiert ist,
+  nicht ohne Panel bleibt, schreibt der Editor in Gruppen mit Profil `"mode": "ThisConfig"` – eine
+  ältere Version zeigt dort das Standardprofil.
+
+**Im Editor:** oben in der Leiste „Profil“ wählen, welches bearbeitet wird; alle Reiter zeigen dann
+dieses Profil, und die Vorschau rendert es. Gespeichert werden nur die Abweichungen. Eine blaue
+Zeile unter der Leiste nennt sie; „Abweichungen anzeigen…“ listet jede Einstellung mit dem Wert im
+Standardprofil und im Profil (auf Wunsch auch alle übrigen, die aus dem Standardprofil kommen), und
+„Markierte: Standardprofil verwenden“ nimmt sie aus dem Profil heraus – sie folgen dann wieder dem
+Standardprofil. „Alles wie im Standardprofil“ verwirft alle Abweichungen. Steht der eigene Rechner
+in einer Gruppe mit einem anderen Profil als dem bearbeiteten, sagt das die orange Zeile unten.
+
+**Bisherige Dateien zusammenführen:** im Reiter „Rechner“ die Gruppe markieren und „Datei als Profil
+übernehmen…“ wählen (Name = Name der Gruppe) – oder über „Profile“ → „Konfigurationsdateien als
+Profile übernehmen…“ eine oder mehrere Dateien auf einmal (Name = Dateiname, ohne
+`BGInfo-Reloaded-`/`BGInfo-` davor). Vorher fragt der Editor, **welche Bereiche** übernommen werden:
+Zeilen des Panels, eigene Felder, Aussehen (Panel, Schrift, Farben, Rahmen), Datums- und
+Zahlenformat, Hintergrund und Monitore, zentrale Datei, Update-Einstellungen, Version und
+Beschreibung – jeweils mit der Zahl der Werte, die vom Standardprofil abweichen. Nicht angehakte
+Bereiche kommen im Profil aus dem Standardprofil. Darunter stehen die **eigenen Felder** der Datei,
+die es im Standardprofil noch nicht (oder mit anderem Wert) gibt: angehakte wandern samt Bezeichnung
+ins Standardprofil und gelten dann für alle Profile. Neue Felder sind vorausgewählt; ein Feld mit
+anderem Wert ändert ihn im Standardprofil für alle Profile, die ihn nicht selbst festlegen, und ist
+deshalb nicht vorausgewählt. Gespeichert werden nur ihre Abweichungen vom Standardprofil;
+relative Pfade (Hintergrundbild, `include`, Update-Ordner) werden auf den Ordner der geöffneten
+Datei umgeschrieben. Gruppen, deren `config` auf eine der Dateien zeigte, verweisen danach auf das
+Profil. Die Dateien selbst bleiben unverändert und können gelöscht werden, sobald alles passt.
 
 ### Zeilen (`items`)
 

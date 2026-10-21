@@ -13,7 +13,7 @@ einer einzigen, fensterlosen `BGInfo-Reloaded.exe` (self-contained, auf dem Ziel
 vorinstalliert sein, kein PowerShell zur Laufzeit). Inhalt und Aussehen des Panels kommen aus einer
 zentral verteilbaren `BGInfo-Reloaded.json`, die sich mit dem mitgelieferten Editor bearbeiten lässt.
 
-Stand: Version 2.18.0 (2026-10-14). Bis Version 1.4.0 hieß das Projekt „BgInfoNative“.
+Stand: Version 2.19.0 (2026-10-21). Bis Version 1.4.0 hieß das Projekt „BgInfoNative“.
 
 - **Bedienung, alle Aufrufe, Konfiguration und Fehlersuche:** [HOWTO.md](HOWTO.md)
   ([English](HOWTO.en.md))
@@ -134,9 +134,12 @@ Windows ist eine Marke von Microsoft.
 - Version und Beschreibung der Konfigurationsdatei (`version`, `description`, `{configversion}`);
   gespeicherte Dateien bekommen erläuternde Standardkommentare.
 - Rechnergruppen (`hosts.groups`): Computernamen mit `*` und `?` sowie IP-Adressen, Netze und
-  Bereiche, direkt in der Konfiguration oder aus einer zentral gepflegten Textdatei; je Gruppe eine
-  eigene Konfigurationsdatei, die Hauptkonfiguration oder kein Panel (die frühere White- und
-  Blacklist wird weiter gelesen und umgewandelt); im Editor Import und Export.
+  Bereiche, direkt in der Konfiguration oder aus einer zentral gepflegten Textdatei; je Gruppe ein
+  Profil, das Standardprofil, eine eigene Konfigurationsdatei oder kein Panel (die frühere White-
+  und Blacklist wird weiter gelesen und umgewandelt); im Editor Import und Export.
+- Profile (`profiles`): mehrere Varianten in einer Datei, je Profil nur die Abweichungen vom
+  Standardprofil; im Editor Auswahl, Gegenüberstellung mit dem Standardprofil, Zusammenführen
+  bisheriger Dateien zu Profilen und Kopieren von Zeilen und Feldern zwischen Profilen.
 - Überwachungsmodus (`--watch`): bei Änderung von Auflösung oder Skalierung automatisch neu rendern.
 - `--list-tags`: alle Platzhalter mit aktuellem Wert, auch für ganze WMI-Klassen und Registry-Schlüssel.
 - Scheduled Tasks für Anmeldung und periodischen Refresh (`--register-task`), ohne Admin-Rechte.
