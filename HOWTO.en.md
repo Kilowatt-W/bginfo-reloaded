@@ -107,8 +107,10 @@ The tabs and buttons (German labels in parentheses):
 - **Title bar:** next to the file name, the detected resolution and Windows scaling of the primary
   monitor – the same values `BGInfo-Reloaded.exe` renders with. Above the preview they are shown for
   every monitor. If they change while the editor is open, display and preview are updated.
-- **Status bar:** messages on the left; on the right the name of the loaded file (full path when
-  the mouse points at it) and the program version.
+- **Status bar:** messages on the left; on the right this machine and what it gets according to the
+  machine groups (e.g. “Rechner: PC-042 → Profil Server”; a click opens the tab “Rechner”), the
+  autostart state, the name of the loaded file (full path when the mouse points at it) and the
+  program version.
 - **Preview (Vorschau):** the whole screen at the top right, below it the info panel. Rendering uses
   the same code as `BGInfo-Reloaded.exe`, for the primary monitor of this machine. Both images fill
   the available space; a movable splitter (grey bar) lies between them. A check box at the right of
@@ -723,7 +725,9 @@ names them; “Abweichungen anzeigen…” lists every setting with its value in
 in the profile (optionally also all others that come from the default profile), and “Markierte:
 Standardprofil verwenden” takes the checked ones out of the profile – they follow the default
 profile again. “Alles wie im Standardprofil” discards all differences. If the own machine is in a
-group with a different profile than the edited one, the orange line at the bottom says so.
+group with a different profile than the edited one, the orange line at the bottom says so; a click on
+it selects this machine's profile. Which profile it gets is also always shown in the status bar
+(“Rechner: … → Profil …”).
 
 **Merging existing files:** select the group in the tab “Rechner” and choose “Datei als Profil
 übernehmen…” (name = name of the group) – or take one or more files at once via “Profile” →

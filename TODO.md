@@ -247,6 +247,8 @@ WMI-Dialog, Anzeige von Blöcken und Filtern. Noch von Hand durchzuklicken:
       als Standardbild; der Editor sagt bei der Auswahl, welche Datei als Standard gilt
 - [x] 2026-10-13 Version 2.16.0: Balken für Prozentwerte (`bar` je Zeile, `colors.barUsed`/`barFree`,
       `panel.barHeight`) – Laufwerke, RAM, Akku; mit Text darunter, ohne Text statt des Werts (drei Fälle gerendert)
+- [x] 2026-10-22 Version 2.22.1: Editor zeigt in der Fußzeile den Rechnernamen und was er laut Rechnergruppen bekommt;
+      orange Hinweis, wenn dieser Rechner ein anderes Profil bekommt als das bearbeitete (fehlte seit 2.19.0), Klick wählt es
 - [x] 2026-10-22 Version 2.22.0: Autostart-Zustand im Editor (Fußzeile, Reiter „Autostart und Werkzeuge“ mit
       Details und Hinweisen bei Abweichungen) und `--task-status`
 - [x] 2026-10-22 Version 2.21.1: Update scheiterte mit „Access … .exe.old is denied“, wenn die .old aus einem

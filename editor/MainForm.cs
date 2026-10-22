@@ -118,11 +118,13 @@ public sealed partial class MainForm : Form
         tabs.TabPages.Add(BuildItemsTab());
         tabs.TabPages.Add(BuildAppearanceTab());
         tabs.TabPages.Add(BuildBackgroundTab());
-        tabs.TabPages.Add(BuildHostsTab());
+        var hostsPage = BuildHostsTab();
+        tabs.TabPages.Add(hostsPage);
         tabs.TabPages.Add(BuildFieldsTab());
         var toolsPage = BuildToolsTab();
         tabs.TabPages.Add(toolsPage);
         SetUpAutostartLabel(tabs, toolsPage);
+        _hostLabel.Click += (_, _) => tabs.SelectedTab = hostsPage;
         tabs.SelectedIndexChanged += (_, _) =>
         {
             if (tabs.SelectedIndex == 0 && _tagsStale)
@@ -138,6 +140,8 @@ public sealed partial class MainForm : Form
         // Flaeche, und das Kaestchen des ausgeblendeten wandert dorthin, damit man es wieder einblenden kann.
         _previewHostNote.Font = new Font(Font, FontStyle.Bold);
         _previewHostNote.Height = _previewHostNote.Font.Height + LogicalToDeviceUnits(10);
+        // Bekommt dieser Rechner ein anderes Profil als das bearbeitete, fuehrt ein Klick dorthin.
+        _previewHostNote.Click += (_, _) => SwitchToMachineProfile();
         var detailCaption = new Label { Text = "Info-Panel – Doppelklick: Originalgröße / einpassen", AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(3, 6, 3, 4) };
         var screenBoxes = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Anchor = AnchorStyles.Right, Margin = Padding.Empty };
         var panelBoxes = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Anchor = AnchorStyles.Right, Margin = Padding.Empty };
@@ -216,6 +220,7 @@ public sealed partial class MainForm : Form
         // Fusszeile: links Meldungen, rechts die geladene Datei und die Programmversion.
         var status = new StatusStrip { ShowItemToolTips = true };
         status.Items.Add(_status);
+        status.Items.Add(_hostLabel);
         status.Items.Add(_autostartLabel);
         status.Items.Add(_fileLabel);
         status.Items.Add(_versionLabel);
@@ -931,6 +936,12 @@ public sealed partial class MainForm : Form
     // Reiter "Rechner": die Gruppen in der Reihenfolge, in der sie geprueft werden.
     private readonly ListView _groups = new() { View = View.Details, FullRowSelect = true, MultiSelect = false, HideSelection = false, ShowItemToolTips = true };
     private readonly Label _groupOfThisMachine = new() { AutoSize = true, ForeColor = SystemColors.GrayText };
+    // Fusszeile: dieser Rechner und was er laut Rechnergruppen bekommt (RefreshGroups schreibt den Text).
+    private readonly ToolStripStatusLabel _hostLabel = new()
+    {
+        IsLink = true, LinkBehavior = LinkBehavior.HoverUnderline, BorderSides = ToolStripStatusLabelBorderSides.Left,
+        Padding = new Padding(6, 0, 6, 0), Text = $"Rechner: {Environment.MachineName}"
+    };
 
     private TabPage BuildHostsTab()
     {
@@ -1029,6 +1040,11 @@ public sealed partial class MainForm : Form
             : $"Er fällt in die Gruppe „{mine.Name}“ (passt auf \"{matchedBy}\"): {DescribeGroupEffect(mine)}.")
             + (_config.Hosts.Groups.Any(g => !string.IsNullOrWhiteSpace(g.MatchFile)) ? "\r\nEinträge aus Listendateien sind hier nicht berücksichtigt – die orange Zeile unten im Fenster prüft sie mit." : "");
         RefreshProfileList(); // "Bekommen" haengt an den Gruppen
+        _hostLabel.Text = $"Rechner: {Environment.MachineName}  →  " + (mine == null ? "Standardprofil" : DescribeGroupEffect(mine));
+        _hostLabel.LinkColor = _hostLabel.ActiveLinkColor = _hostLabel.VisitedLinkColor = mine is { Excludes: true } ? Color.Firebrick : SystemColors.ControlText;
+        _hostLabel.ToolTipText = $"Dieser Rechner: {Environment.MachineName} ({hostNames[1]})\r\n"
+            + (mine == null ? "Er steht in keiner Rechnergruppe und bekommt das Standardprofil." : $"Gruppe „{mine.Name}“ (passt auf \"{matchedBy}\"): {DescribeGroupEffect(mine)}")
+            + "\r\nGroß- und Kleinschreibung spielt beim Vergleich der Namen keine Rolle. Klick öffnet den Reiter „Rechner“.";
     }
 
     private HostGroup? SelectedGroup =>
@@ -3684,6 +3700,7 @@ public sealed partial class MainForm : Form
     {
         _previewHostNote.Text = note;
         _previewHostNote.Visible = note.Length > 0;
+        _previewHostNote.Cursor = note.Contains("Klick:") ? Cursors.Hand : Cursors.Default;
         _tips.SetToolTip(_previewHostNote, note);
     }
 
@@ -3720,6 +3737,20 @@ public sealed partial class MainForm : Form
     {
         var hostNames = new[] { Environment.MachineName, new ValueResolver().Expand("{fqdn}") };
         var group = config.Hosts.FindGroup(hostNames, out var matchedBy);
+        // Die Vorschau zeigt das bearbeitete Profil (config.ActiveProfile) - sagen, wenn dieser Rechner ein anderes bekommt.
+        if (group is { UsesProfile: true } && !string.Equals(group.Profile, config.ActiveProfile, StringComparison.OrdinalIgnoreCase))
+        {
+            return $"Hinweis: {Environment.MachineName} fällt in die Gruppe „{group.Name}“ (passt auf \"{matchedBy}\") – BGInfo-Reloaded.exe verwendet hier das Profil „{group.Profile}“. "
+                + $"Die Vorschau zeigt {(config.ActiveProfile == null ? "das Standardprofil" : $"das Profil „{config.ActiveProfile}“")}. Klick: dieses Profil bearbeiten.";
+        }
+        if (group is { UsesProfile: false, UsesOwnConfig: false, Excludes: false } && config.ActiveProfile != null)
+        {
+            return $"Hinweis: {Environment.MachineName} fällt in die Gruppe „{group.Name}“ und bekommt das Standardprofil. Die Vorschau zeigt das Profil „{config.ActiveProfile}“. Klick: Standardprofil bearbeiten.";
+        }
+        if (group == null && config.ActiveProfile != null)
+        {
+            return $"Hinweis: {Environment.MachineName} steht in keiner Gruppe und bekommt das Standardprofil. Die Vorschau zeigt das Profil „{config.ActiveProfile}“. Klick: Standardprofil bearbeiten.";
+        }
         if (group is { UsesOwnConfig: true })
         {
             return $"Achtung: {Environment.MachineName} fällt in die Gruppe „{group.Name}“ (passt auf \"{matchedBy}\") – BGInfo-Reloaded.exe verwendet hier {group.Config}. Die Vorschau zeigt die geöffnete Datei.";

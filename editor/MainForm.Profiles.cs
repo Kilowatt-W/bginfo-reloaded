@@ -113,6 +113,22 @@ public sealed partial class MainForm
             : $"Profil „{_profile}“: Änderungen gelten nur hier; alles Übrige kommt aus dem Standardprofil.";
     }
 
+    /// <summary>Das Profil waehlen, das dieser Rechner laut Rechnergruppen bekommt (bzw. das Standardprofil).</summary>
+    private void SwitchToMachineProfile()
+    {
+        var hostNames = new[] { Environment.MachineName, new ValueResolver().Expand("{fqdn}") };
+        var group = _root.Hosts.FindGroup(hostNames, out _);
+        if (group is { Excludes: true } or { UsesOwnConfig: true })
+        {
+            return; // kein Profil dieser Datei
+        }
+        var target = group is { UsesProfile: true } ? _root.FindProfile(group.Profile) : null;
+        if (!string.Equals(target, _profile, StringComparison.OrdinalIgnoreCase))
+        {
+            SwitchProfile(target);
+        }
+    }
+
     /// <summary>Nach einer Aenderung am Standardprofil, waehrend ein Profil gewaehlt ist: das Profil neu zusammensetzen, damit es sie erbt.</summary>
     private void RebuildProfile()
     {

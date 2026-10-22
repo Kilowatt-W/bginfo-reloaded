@@ -98,8 +98,10 @@ BGInfo-Reloaded-Editor.exe BGInfo-Reloaded.json      eine vorhandene Datei öffn
 - **Titelleiste:** neben dem Dateinamen die erkannte Auflösung und Windows-Skalierung des primären
   Monitors – dieselben Werte, mit denen `BGInfo-Reloaded.exe` rendert. Über der Vorschau stehen sie
   für jeden Monitor. Ändern sie sich bei geöffnetem Editor, werden Anzeige und Vorschau aktualisiert.
-- **Fußzeile:** links Meldungen, rechts der Name der geladenen Datei (voller Pfad beim Zeigen mit
-  der Maus) und die Programmversion.
+- **Fußzeile:** links Meldungen, rechts dieser Rechner und was er laut Rechnergruppen bekommt
+  (z. B. „Rechner: PC-042 → Profil Server“; Klick öffnet den Reiter „Rechner“), der
+  Autostart-Zustand, der Name der geladenen Datei (voller Pfad beim Zeigen mit der Maus) und die
+  Programmversion.
 - **Vorschau:** rechts oben der ganze Bildschirm, darunter das Info-Panel. Gerendert wird mit
   demselben Code wie in `BGInfo-Reloaded.exe`, für den primären Monitor dieses Rechners. Beide
   Bilder füllen den verfügbaren Platz; dazwischen liegt ein verschiebbarer Teiler (grauer Balken).
@@ -711,7 +713,9 @@ Zeile unter der Leiste nennt sie; „Abweichungen anzeigen…“ listet jede Ein
 Standardprofil und im Profil (auf Wunsch auch alle übrigen, die aus dem Standardprofil kommen), und
 „Markierte: Standardprofil verwenden“ nimmt sie aus dem Profil heraus – sie folgen dann wieder dem
 Standardprofil. „Alles wie im Standardprofil“ verwirft alle Abweichungen. Steht der eigene Rechner
-in einer Gruppe mit einem anderen Profil als dem bearbeiteten, sagt das die orange Zeile unten.
+in einer Gruppe mit einem anderen Profil als dem bearbeiteten, sagt das die orange Zeile unten; ein
+Klick darauf wählt das Profil dieses Rechners. Welches Profil er bekommt, steht außerdem immer in
+der Fußzeile („Rechner: … → Profil …“).
 
 **Bisherige Dateien zusammenführen:** im Reiter „Rechner“ die Gruppe markieren und „Datei als Profil
 übernehmen…“ wählen (Name = Name der Gruppe) – oder über „Profile“ → „Konfigurationsdateien als
