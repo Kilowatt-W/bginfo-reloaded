@@ -96,6 +96,12 @@ The tabs and buttons (German labels in parentheses):
   [Profiles](#profiles-several-configurations-in-one-file-profiles)).
 - **File and fields (Datei und Felder):** version and description of the file, central file
   (`include`), custom fields.
+- **Autostart state:** the right side of the status bar always shows whether autostart is active
+  (green), set up but disabled (orange) or off (grey); a click opens the tab “Autostart und
+  Werkzeuge”. There, “Zustand” (state) shows the details – at logon, with `--watch` and whether the
+  watch is running right now, interval, program and configuration of the task – including a hint when
+  the task uses a different program or configuration than the editor. The fields below are preset to
+  match how autostart is set up.
 - **Autostart and tools (Autostart und Werkzeuge):** set up and remove the autostart tasks
   (interval, `--watch`), save the preview as an image file, open the log file and the data folder.
 - **Title bar:** next to the file name, the detected resolution and Windows scaling of the primary
@@ -206,6 +212,7 @@ BGInfo-Reloaded.exe --config BGInfo-Reloaded.sample.json --preview preview.png
 | `--register-task --config <path\|url>` | autostart with a fixed configuration source |
 | `--register-task --watch` | autostart that additionally reacts to resolution changes |
 | `--unregister-task` | remove autostart again |
+| `--task-status` | show whether and how autostart is set up (logon, `--watch` and whether it is running, interval, program, configuration); exit code 0 = active, 1 = not active |
 | `--watch` | render and stay active; re-render when resolution or scaling changes |
 | `--list-tags` | print all placeholders with description and current value |
 | `--list-tags wmi:<class>` | all properties of a WMI class as ready-to-use placeholders |

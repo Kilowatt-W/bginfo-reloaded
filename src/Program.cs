@@ -181,6 +181,17 @@ static class EntryPoint
                 return 0;
             }
 
+            if (args.Contains("--task-status"))
+            {
+                var status = AppTaskScheduler.QueryStatus();
+                Console.WriteLine(status.Summary);
+                foreach (var line in status.Details())
+                {
+                    Console.WriteLine($"  {line}");
+                }
+                return status.Active ? 0 : 1;
+            }
+
             if (args.Contains("--update"))
             {
                 var repo = GetStringOption(args, "--repo");
@@ -571,6 +582,7 @@ static class EntryPoint
                                                            Autostart mit eigenem Refresh-Intervall (0 = nur bei Anmeldung)
               BGInfo-Reloaded.exe --register-task --watch    Autostart, der zusaetzlich auf Aufloesungswechsel reagiert
               BGInfo-Reloaded.exe --unregister-task          Autostart-Tasks wieder entfernen
+              BGInfo-Reloaded.exe --task-status              Zeigen, ob und wie der Autostart eingerichtet ist (Exit 0 = aktiv)
 
               BGInfo-Reloaded.exe --watch                   Rendern und aktiv bleiben: bei Aenderung von Aufloesung
                                                            oder Skalierung automatisch neu rendern

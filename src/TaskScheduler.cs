@@ -74,6 +74,100 @@ public static class AppTaskScheduler
         TryDelete(RefreshTaskName);
     }
 
+    /// <summary>Ein eingerichteter Task, wie er in der Aufgabenplanung steht.</summary>
+    public sealed record TaskInfo(bool Enabled, string Command, string Arguments, TimeSpan? Interval)
+    {
+        /// <summary>Die Konfiguration aus "--config" - null = Suche wie ohne Angabe.</summary>
+        public string? Config
+        {
+            get
+            {
+                var match = System.Text.RegularExpressions.Regex.Match(Arguments, "--config\\s+(?:\"([^\"]+)\"|(\\S+))");
+                return match.Success ? (match.Groups[1].Success ? match.Groups[1].Value : match.Groups[2].Value) : null;
+            }
+        }
+
+        public bool Watch => Arguments.Contains("--watch", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Zustand des Autostarts fuer den angemeldeten Benutzer.</summary>
+    public sealed record AutostartStatus(TaskInfo? Logon, TaskInfo? Refresh, bool WatchRunning)
+    {
+        public bool Active => Logon is { Enabled: true } || Refresh is { Enabled: true };
+
+        /// <summary>Kurzform fuer die Fusszeile.</summary>
+        public string Summary => !Active
+            ? (Logon != null || Refresh != null ? "Autostart: deaktiviert" : "Autostart: aus")
+            : "Autostart: aktiv" + (Logon is { Watch: true } ? (WatchRunning ? " (überwacht, läuft)" : " (überwacht)") : "")
+              + (Refresh is { Enabled: true, Interval: { } every } ? $", alle {Minutes(every)} min" : "");
+
+        /// <summary>Ausfuehrlich, eine Angabe je Zeile.</summary>
+        public IEnumerable<string> Details()
+        {
+            if (Logon == null && Refresh == null)
+            {
+                yield return "Kein Autostart eingerichtet – das Wallpaper wird nur aktualisiert, wenn BGInfo-Reloaded.exe von Hand oder per Skript läuft.";
+                yield break;
+            }
+            if (Logon != null)
+            {
+                yield return $"Bei der Anmeldung: {(Logon.Enabled ? "eingerichtet" : "eingerichtet, aber in der Aufgabenplanung deaktiviert")}"
+                    + (Logon.Watch ? $", bleibt danach aktiv und reagiert auf Auflösungswechsel (--watch) – {(WatchRunning ? "läuft gerade" : "läuft gerade nicht")}" : "");
+            }
+            else
+            {
+                yield return "Bei der Anmeldung: nicht eingerichtet";
+            }
+            yield return Refresh == null
+                ? "Regelmäßig: nicht eingerichtet (nur bei der Anmeldung)"
+                : $"Regelmäßig: alle {(Refresh.Interval is { } every ? Minutes(every) : "?")} Minuten{(Refresh.Enabled ? "" : " – in der Aufgabenplanung deaktiviert")}";
+            var task = Logon ?? Refresh!;
+            yield return $"Programm: {task.Command}";
+            yield return $"Konfiguration: {task.Config ?? "ohne --config (Startverzeichnis, Programmordner, dann %ProgramData%)"}";
+        }
+
+        private static string Minutes(TimeSpan span) => ((int)span.TotalMinutes).ToString(System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>Liest beide Tasks aus der Aufgabenplanung und sieht nach, ob eine --watch-Instanz laeuft. Wirft nie.</summary>
+    public static AutostartStatus QueryStatus() => new(TryQuery(LogonTaskName), TryQuery(RefreshTaskName), IsWatchRunning());
+
+    private static TaskInfo? TryQuery(string taskName)
+    {
+        try
+        {
+            // /XML liefert die Definition unabhaengig von der Sprache von Windows.
+            var xml = XDocument.Parse(RunSchtasks($"/Query /TN \"{taskName}\" /XML"));
+            var exec = xml.Descendants(Ns + "Exec").FirstOrDefault();
+            var enabled = xml.Root?.Element(Ns + "Settings")?.Element(Ns + "Enabled")?.Value;
+            var interval = xml.Descendants(Ns + "Repetition").Elements(Ns + "Interval").FirstOrDefault()?.Value;
+            return new TaskInfo(
+                !string.Equals(enabled, "false", StringComparison.OrdinalIgnoreCase),
+                exec?.Element(Ns + "Command")?.Value.Trim('"') ?? "",
+                exec?.Element(Ns + "Arguments")?.Value ?? "",
+                interval != null ? System.Xml.XmlConvert.ToTimeSpan(interval) : null);
+        }
+        catch
+        {
+            return null; // nicht eingerichtet (oder nicht lesbar)
+        }
+    }
+
+    private static bool IsWatchRunning()
+    {
+        try
+        {
+            using var searcher = new System.Management.ManagementObjectSearcher(
+                $"SELECT CommandLine FROM Win32_Process WHERE Name = '{FolderUpdater.MainExe}' AND SessionId = {Process.GetCurrentProcess().SessionId}");
+            return searcher.Get().Cast<System.Management.ManagementObject>()
+                .Any(process => (process["CommandLine"] as string ?? "").Contains("--watch", StringComparison.OrdinalIgnoreCase));
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     private static void CreateTask(string name, string user, string exePath, string arguments, XElement trigger, string description)
     {
         var exec = new XElement(Ns + "Exec", new XElement(Ns + "Command", exePath));
@@ -138,7 +232,7 @@ public static class AppTaskScheduler
         }
     }
 
-    private static void RunSchtasks(string arguments)
+    private static string RunSchtasks(string arguments)
     {
         var psi = new ProcessStartInfo("schtasks.exe", arguments)
         {
@@ -157,5 +251,6 @@ public static class AppTaskScheduler
         {
             throw new InvalidOperationException($"schtasks.exe {arguments} fehlgeschlagen (Exit {process.ExitCode}): {stderr}{stdout}");
         }
+        return stdout;
     }
 }

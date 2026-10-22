@@ -87,6 +87,12 @@ BGInfo-Reloaded-Editor.exe BGInfo-Reloaded.json      eine vorhandene Datei öffn
   für Felder („Felder in Profile kopieren…“). Dort sind auch die Einträge „Für alle Profile: oben /
   unten“ (siehe [Profile](#profile-mehrere-konfigurationen-in-einer-datei-profiles)).
 - **Datei und Felder:** Version und Beschreibung der Datei, zentrale Datei (`include`), eigene Felder.
+- **Autostart-Zustand:** rechts in der Fußzeile steht immer, ob der Autostart aktiv ist (grün),
+  eingerichtet, aber deaktiviert (orange) oder aus (grau); ein Klick führt zum Reiter „Autostart und
+  Werkzeuge“. Dort steht unter „Zustand“ alles Genauere – bei der Anmeldung, mit `--watch` und ob die
+  Überwachung gerade läuft, Intervall, Programm und Konfiguration des Tasks – samt Hinweis, wenn der
+  Task ein anderes Programm oder eine andere Konfiguration nimmt als der Editor. Die Felder darunter
+  sind beim Öffnen so vorbelegt, wie der Autostart eingerichtet ist.
 - **Autostart und Werkzeuge:** Autostart-Tasks einrichten und entfernen (Intervall, `--watch`),
   Vorschau als Bilddatei speichern, Logdatei und Datenordner öffnen.
 - **Titelleiste:** neben dem Dateinamen die erkannte Auflösung und Windows-Skalierung des primären
@@ -193,6 +199,7 @@ BGInfo-Reloaded.exe --register-task            4. künftig automatisch aktualisi
 | `--register-task --config <pfad\|url>` | Autostart mit fester Konfigurationsquelle |
 | `--register-task --watch` | Autostart, der zusätzlich auf Auflösungswechsel reagiert |
 | `--unregister-task` | Autostart wieder entfernen |
+| `--task-status` | zeigen, ob und wie der Autostart eingerichtet ist (Anmeldung, `--watch` und ob es gerade läuft, Intervall, Programm, Konfiguration); Exit-Code 0 = aktiv, 1 = nicht aktiv |
 | `--watch` | rendern und aktiv bleiben; bei Änderung von Auflösung oder Skalierung neu rendern |
 | `--list-tags` | alle Platzhalter mit Beschreibung und aktuellem Wert ausgeben |
 | `--list-tags wmi:<Klasse>` | alle Eigenschaften einer WMI-Klasse als fertige Platzhalter |

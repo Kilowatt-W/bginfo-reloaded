@@ -13,7 +13,7 @@ windowless `BGInfo-Reloaded.exe` (self-contained, nothing has to be preinstalled
 machine, no PowerShell at runtime). Content and appearance of the panel come from a
 `BGInfo-Reloaded.json` that can be distributed centrally and edited with the included editor.
 
-Status: version 2.21.1 (2026-10-22). Up to version 1.4.0 the project was called "BgInfoNative".
+Status: version 2.22.0 (2026-10-22). Up to version 1.4.0 the project was called "BgInfoNative".
 
 - **Usage, all commands, configuration and troubleshooting:** [HOWTO.en.md](HOWTO.en.md)
   ([Deutsch](HOWTO.md))

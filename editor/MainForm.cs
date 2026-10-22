@@ -120,7 +120,9 @@ public sealed partial class MainForm : Form
         tabs.TabPages.Add(BuildBackgroundTab());
         tabs.TabPages.Add(BuildHostsTab());
         tabs.TabPages.Add(BuildFieldsTab());
-        tabs.TabPages.Add(BuildToolsTab());
+        var toolsPage = BuildToolsTab();
+        tabs.TabPages.Add(toolsPage);
+        SetUpAutostartLabel(tabs, toolsPage);
         tabs.SelectedIndexChanged += (_, _) =>
         {
             if (tabs.SelectedIndex == 0 && _tagsStale)
@@ -214,6 +216,7 @@ public sealed partial class MainForm : Form
         // Fusszeile: links Meldungen, rechts die geladene Datei und die Programmversion.
         var status = new StatusStrip { ShowItemToolTips = true };
         status.Items.Add(_status);
+        status.Items.Add(_autostartLabel);
         status.Items.Add(_fileLabel);
         status.Items.Add(_versionLabel);
         _versionLabel.Text = $"BGInfo-Reloaded {GitHubUpdater.CurrentVersion.ToString(3)}";
@@ -264,6 +267,7 @@ public sealed partial class MainForm : Form
                 // Editor soll trotzdem starten.
             }
             _split.Panel2Collapsed = !_previewEnabled;
+            RefreshAutostartStatus();
             // Mindestgroessen erst jetzt: vor dem ersten Layout ist ein SplitContainer winzig, und Windows
             // Forms lehnt Mindestgroessen ab, die nicht hineinpassen (Absturz beim Start).
             SetMinSizes(_itemsSplit, 200);
@@ -1626,6 +1630,7 @@ public sealed partial class MainForm : Form
         }
 
         Heading(table, "Autostart für den angemeldeten Benutzer");
+        Row(table, "Zustand", BuildAutostartStatus());
         Row(table, "Aktualisieren alle … Minuten (0 = nur bei Anmeldung)", _taskInterval);
         Row(table, "", _taskWatch);
         Row(table, "", _taskUseConfig);
@@ -1641,9 +1646,9 @@ public sealed partial class MainForm : Form
                 }
                 arguments += $" --config \"{_path}\"";
             }
-            RunTool(arguments, "Autostart eingerichtet.");
+            RunTool(arguments, "Autostart eingerichtet.", RefreshAutostartStatus);
         }));
-        tasks.Controls.Add(Action("Autostart entfernen", () => RunTool("--unregister-task", "Autostart entfernt.")));
+        tasks.Controls.Add(Action("Autostart entfernen", () => RunTool("--unregister-task", "Autostart entfernt.", RefreshAutostartStatus)));
         Row(table, "", tasks);
         Row(table, "", Hint("Die Tasks gelten für den Benutzer, der sie einrichtet, und laufen in dessen Sitzung – auf den Zielrechnern\r\nmuss das je Benutzer geschehen (z. B. per Anmeldeskript: BGInfo-Reloaded.exe --register-task)."));
 
@@ -1723,7 +1728,7 @@ public sealed partial class MainForm : Form
     }
 
     /// <summary>Fuehrt BGInfo-Reloaded.exe neben dem Editor mit den Argumenten aus und meldet das Ergebnis in der Fusszeile.</summary>
-    private async void RunTool(string arguments, string successText)
+    private async void RunTool(string arguments, string successText, Action? done = null)
     {
         var exe = Path.Combine(Path.GetDirectoryName(Environment.ProcessPath) ?? "", "BGInfo-Reloaded.exe");
         if (!File.Exists(exe))
@@ -1741,6 +1746,7 @@ public sealed partial class MainForm : Form
             _status.Text = process.ExitCode == 0
                 ? successText
                 : $"BGInfo-Reloaded.exe meldet einen Fehler (Exit-Code {process.ExitCode}). Details: {RunLog.LogFile}";
+            done?.Invoke();
         }
         catch (Exception ex)
         {
@@ -3474,6 +3480,7 @@ public sealed partial class MainForm : Form
             var json = File.ReadAllText(file);
             SetRoot(AppConfig.FromJson(json, file));
             _path = file;
+            RefreshAutostartStatus(); // Hinweis, wenn der Autostart eine andere Datei nimmt
             _dirty = false;
             // Die Standardkommentare schreibt ToJson bei jedem Speichern neu. Eigene Kommentare kann die
             // Serialisierung nicht erhalten - vor dem ersten Ueberschreiben nachfragen.
