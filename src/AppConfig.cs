@@ -77,6 +77,9 @@ public sealed class PanelConfig
     /// <summary>Hoehe der Balken ("bar" einer Zeile) in Pixeln; wird wie das Panel skaliert.</summary>
     public int BarHeight { get; set; } = 8;
 
+    /// <summary>Staerke eines Trennstrichs ("separator" einer Zeile) in Pixeln; wird wie das Panel skaliert.</summary>
+    public int SeparatorWidth { get; set; } = 1;
+
     /// <summary>
     /// Gesamt-Deckkraft des Panels in Prozent (0 bis 100): verrechnet sich mit allen eingestellten
     /// Deckkraeften (Hintergrund, Schatten, Texte, Balken, Rahmen). 100 = wie eingestellt.
@@ -516,6 +519,9 @@ public sealed class ColorConfig
 
     /// <summary>Balken: der freie Teil (und damit die Flaeche des ganzen Balkens).</summary>
     public string BarFree { get; set; } = "#FFFFFF30";
+
+    /// <summary>Trennstrich ("separator" einer Zeile).</summary>
+    public string Separator { get; set; } = "#FFFFFF60";
 }
 
 /// <summary>Wie das Bild fuer einen Monitor gefunden wurde (siehe <see cref="AppConfig.ResolveWallpaperFor"/>).</summary>
@@ -582,6 +588,14 @@ public sealed class ItemConfig
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool Spacer { get; set; }
+
+    /// <summary>Wie ein Leerraum, mit einer waagrechten Linie in der Mitte (Farbe colors.separator, Staerke panel.separatorWidth).</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Separator { get; set; }
+
+    /// <summary>Leerraum oder Trennstrich - eine Zeile ohne Text.</summary>
+    [JsonIgnore]
+    public bool IsGap => Spacer || Separator;
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool Drives { get; set; }
@@ -930,7 +944,7 @@ public sealed class AppConfig
     /// Ueberlagert <paramref name="target"/> mit <paramref name="overlay"/>: Bloecke der obersten Ebene
     /// ("panel", "fields" ...) Wert fuer Wert, deren Werte und alles andere (auch Listen) als Ganzes.
     /// </summary>
-    public static void MergeInto(JsonObject target, JsonObject overlay, bool topLevel = true)
+    public static void MergeInto(JsonObject target, JsonObject overlay, bool topLevel = true, bool keepExisting = false)
     {
         foreach (var (key, value) in overlay)
         {
@@ -938,10 +952,14 @@ public sealed class AppConfig
             {
                 continue;
             }
+            if (keepExisting && value == null)
+            {
+                continue; // Felder des Standardprofils lassen sich im Profil nicht entfernen (Dateien von 2.19.0 enthalten solche null)
+            }
             var existingKey = target.Select(pair => pair.Key).FirstOrDefault(k => string.Equals(k, key, StringComparison.OrdinalIgnoreCase)) ?? key;
             if (topLevel && value is JsonObject inner && target[existingKey] is JsonObject current)
             {
-                MergeInto(current, inner, topLevel: false);
+                MergeInto(current, inner, topLevel: false, keepExisting: IsInheritedBlock(key));
             }
             else
             {
@@ -954,9 +972,10 @@ public sealed class AppConfig
     /// Was <paramref name="effective"/> von <paramref name="baseline"/> unterscheidet - das, was in einem
     /// Profil stehen muss. Bloecke der obersten Ebene werden Wert fuer Wert verglichen (so, wie
     /// <see cref="MergeInto"/> sie ueberlagert), alles andere als Ganzes; ein Wert, der im Standard
-    /// steht, im Profil aber fehlt, wird als null festgehalten.
+    /// steht, im Profil aber fehlt, wird als null festgehalten - ausser bei den eigenen Feldern
+    /// (<see cref="IsInheritedBlock"/>), die gelten in jedem Profil.
     /// </summary>
-    public static JsonObject Diff(JsonObject effective, JsonObject baseline, bool topLevel = true)
+    public static JsonObject Diff(JsonObject effective, JsonObject baseline, bool topLevel = true, bool keepExisting = false)
     {
         var result = new JsonObject();
         foreach (var (key, value) in effective)
@@ -968,7 +987,7 @@ public sealed class AppConfig
             var other = baseline[key];
             if (topLevel && value is JsonObject inner && other is JsonObject innerBase)
             {
-                var nested = Diff(inner, innerBase, topLevel: false);
+                var nested = Diff(inner, innerBase, topLevel: false, keepExisting: IsInheritedBlock(key));
                 if (nested.Count > 0)
                 {
                     result[key] = nested;
@@ -981,13 +1000,19 @@ public sealed class AppConfig
         }
         foreach (var (key, _) in baseline)
         {
-            if (!(topLevel && FileOnlyKeys.Contains(key, StringComparer.OrdinalIgnoreCase)) && !effective.ContainsKey(key))
+            if (!keepExisting && !(topLevel && FileOnlyKeys.Contains(key, StringComparer.OrdinalIgnoreCase)) && !effective.ContainsKey(key))
             {
                 result[key] = null;
             }
         }
         return result;
     }
+
+    /// <summary>
+    /// Bloecke, deren Eintraege des Standardprofils in jedem Profil gelten: ein Profil kann ihren Wert
+    /// aendern und eigene hinzufuegen, aber keinen entfernen - die eigenen Felder.
+    /// </summary>
+    private static bool IsInheritedBlock(string key) => key.Equals("fields", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Frei waehlbare Version der Konfigurationsdatei; im Panel als {configversion} nutzbar.</summary>
     public string? Version { get; set; }

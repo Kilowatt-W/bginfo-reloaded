@@ -52,6 +52,7 @@ public sealed partial class MainForm : Form
     private int _currentGeneration;
     private bool _fillingFieldValues;
     private readonly CheckBox _itemHide = new() { AutoSize = true, Text = "Zeile weglassen, wenn der Wert leer oder n/a ist" };
+    private readonly CheckBox _itemSeparator = new() { AutoSize = true, Text = "Als Trennstrich zeichnen (sonst nur Leerraum)" };
     private readonly TextBox _itemOnlyOn = new() { Dock = DockStyle.Fill, PlaceholderText = "leer = überall; Muster mit Komma trennen, z. B. SRV-*, *-DC??" };
     private readonly TextBox _itemNotOn = new() { Dock = DockStyle.Fill, PlaceholderText = "Muster mit Komma trennen, z. B. KIOSK-*" };
     private readonly TextBox _itemWhen = new() { Dock = DockStyle.Fill, PlaceholderText = "z. B. {systemtype} = Server   oder   {env:STANDORT} != Berlin" };
@@ -385,6 +386,7 @@ public sealed partial class MainForm : Form
         Add("+ Überschrift", () => InsertItem(new ItemConfig { Section = "ÜBERSCHRIFT" }));
         Add("+ Zeile", () => InsertItem(new ItemConfig { Label = "Bezeichnung", Value = "" }));
         Add("+ Leerraum", () => InsertItem(new ItemConfig { Spacer = true }));
+        Add("+ Trennstrich", () => InsertItem(new ItemConfig { Separator = true }));
         Add("+ Laufwerke", () => InsertItem(new ItemConfig { Drives = true }));
         Add("+ Balken", AddBar);
         Add("+ Zentrale Zeilen", () => InsertItem(new ItemConfig { IncludeItems = true }));
@@ -425,6 +427,10 @@ public sealed partial class MainForm : Form
         _tips.SetToolTip(_itemCurrent, "Das Ergebnis von „Value“ auf diesem Rechner, mit aufgelösten Platzhaltern.\r\nNur zur Ansicht – auf anderen Rechnern steht hier deren Wert.");
         detail.Controls.Add(new Label { AutoSize = true });
         detail.Controls.Add(_itemHide);
+        detail.Controls.Add(new Label { AutoSize = true });
+        detail.Controls.Add(_itemSeparator);
+        _tips.SetToolTip(_itemSeparator, "Für Leerraum und Trennstrich: eine Linie in der Mitte über die ganze Breite des Panels.\r\nFarbe und Stärke: Reiter „Aussehen“, Abschnitt „Trennstrich“.");
+        _itemSeparator.CheckedChanged += (_, _) => EditSelectedItem();
         foreach (var (caption, box) in new[] { ("Nur auf Rechnern", _itemOnlyOn), ("Nicht auf Rechnern", _itemNotOn), ("Nur wenn", _itemWhen) })
         {
             detail.Controls.Add(new Label { Text = caption, AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(3, 6, 10, 6) });
@@ -728,6 +734,11 @@ public sealed partial class MainForm : Form
         Row(table, "Belegter Teil", ColorButton(() => _config.Colors.BarUsed, v => _config.Colors.BarUsed = v));
         Row(table, "Freier Teil", ColorButton(() => _config.Colors.BarFree, v => _config.Colors.BarFree = v));
         Row(table, "Höhe in Pixeln", Number(1, 60, () => _config.Panel.BarHeight, v => _config.Panel.BarHeight = (int)v));
+
+        Heading(table, "Trennstrich");
+        Row(table, "Farbe", ColorButton(() => _config.Colors.Separator, v => _config.Colors.Separator = v));
+        Row(table, "Stärke in Pixeln", Number(1, 20, () => _config.Panel.SeparatorWidth, v => _config.Panel.SeparatorWidth = (int)v));
+        Row(table, "", Hint("Zeilenart „+ Trennstrich“ im Reiter „Inhalt“ – oder bei einem Leerraum „Als Trennstrich zeichnen“ anhaken."));
         Row(table, "", Hint("Ein Balken gehört zu einer Zeile: im Reiter „Inhalt“ das Feld „Balken“ mit einem Prozentwert füllen – {percent} bei der\r\nLaufwerke-Zeile, {rampercent} für den Arbeitsspeicher, {battery} für den Akku."));
 
         Heading(table, "Rahmen");
@@ -1300,6 +1311,47 @@ public sealed partial class MainForm : Form
         }
     }
 
+    /// <summary>
+    /// In einem Profil: Felder, die unveraendert aus dem Standardprofil kommen, grau mit Hinweis; geaenderte
+    /// als Abweichung kennzeichnen. Im Standardprofil bleibt alles normal.
+    /// </summary>
+    private void StyleFieldRow(DataGridViewRow row)
+    {
+        if (row.IsNewRow)
+        {
+            return;
+        }
+        var name = (row.Cells[0].Value as string ?? "").Trim().Trim('{', '}');
+        string origin = "", tip = "";
+        var inherited = false;
+        if (_profile != null && name.Length > 0)
+        {
+            var inStandard = _root.Fields.TryGetValue(name, out var standardValue);
+            var sameLabel = (_root.Fields.LabelOf(name) ?? "") == (row.Cells[3].Value as string ?? "").Trim();
+            if (inStandard && standardValue == (row.Cells[1].Value as string ?? "") && sameLabel)
+            {
+                inherited = true;
+                origin = "Standardprofil";
+                tip = "Kommt aus dem Standardprofil und gilt in allen Profilen. Ändern legt eine Abweichung in diesem Profil an.";
+            }
+            else if (inStandard)
+            {
+                origin = "Profil (ändert Standard)";
+                tip = $"Im Standardprofil: {standardValue}";
+            }
+            else
+            {
+                origin = "nur dieses Profil";
+            }
+        }
+        row.Cells[4].Value = origin;
+        foreach (var index in new[] { 0, 1, 3, 4 })
+        {
+            row.Cells[index].Style.ForeColor = inherited ? SystemColors.GrayText : Color.Empty;
+            row.Cells[index].ToolTipText = tip;
+        }
+    }
+
     private TabPage BuildFieldsTab()
     {
         var include = TextField(() => _config.Include ?? "", v =>
@@ -1332,15 +1384,19 @@ public sealed partial class MainForm : Form
         // Bezeichnung: erscheint als "Bedeutung" in der Platzhalterliste und als Bezeichnung einer Zeile,
         // die per Doppelklick oder Ziehen entsteht. Spalte 3, angezeigt gleich nach dem Namen.
         _fields.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Bezeichnung (für Zeilen)", FillWeight = 22, DisplayIndex = 1 });
+        // Nur in einem Profil sichtbar: woher das Feld kommt (Spalte 4).
+        _fields.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Herkunft", FillWeight = 16, ReadOnly = true, Visible = false });
         _fields.Columns[0].FillWeight = 20;
         _fields.Columns[1].FillWeight = 36;
         _fields.Columns[2].FillWeight = 22;
         void LoadFields()
         {
             _fields.Rows.Clear();
+            _fields.Columns[4].Visible = _profile != null;
             foreach (var (name, definition) in _config.Fields)
             {
-                _fields.Rows.Add(name, definition, "", _config.Fields.LabelOf(name) ?? "");
+                var row = _fields.Rows[_fields.Rows.Add(name, definition, "", _config.Fields.LabelOf(name) ?? "")];
+                StyleFieldRow(row);
             }
             ScheduleCurrentValues();
         }
@@ -1369,8 +1425,25 @@ public sealed partial class MainForm : Form
             Changed();
         }
         _loaders.Add(LoadFields);
-        _fields.CellValueChanged += (_, _) => StoreFields();
+        _fields.CellValueChanged += (_, e) =>
+        {
+            StoreFields();
+            if (!_loading && e.RowIndex >= 0 && e.ColumnIndex != 2 && e.ColumnIndex != 4)
+            {
+                StyleFieldRow(_fields.Rows[e.RowIndex]);
+            }
+        };
         _fields.RowsRemoved += (_, _) => StoreFields();
+        // Felder des Standardprofils gelten in jedem Profil - dort loeschen, nicht hier.
+        _fields.UserDeletingRow += (_, e) =>
+        {
+            var name = (e.Row?.Cells[0].Value as string ?? "").Trim().Trim('{', '}');
+            if (_profile != null && name.Length > 0 && _root.Fields.ContainsKey(name))
+            {
+                e.Cancel = true;
+                _status.Text = $"Das Feld {{{name}}} kommt aus dem Standardprofil und gilt in allen Profilen – löschen lässt es sich nur im Standardprofil. Hier kann nur der Wert geändert werden.";
+            }
+        };
 
         // Kopieren und Einfuegen ganzer Felder - z.B. in die Tabelle eines anderen Editorfensters.
         // Format: je Feld eine Zeile "Name<Tab>Value<Tab>Bezeichnung".
@@ -1919,6 +1992,10 @@ public sealed partial class MainForm : Form
         {
             return "      (Zeilen der zentralen Datei)";
         }
+        if (item.Separator)
+        {
+            return "      ──────── (Trennstrich)";
+        }
         if (item.Spacer)
         {
             return "      (Leerraum)";
@@ -1963,9 +2040,9 @@ public sealed partial class MainForm : Form
 
         var isBlock = item is { Block: not null, EndBlock: false };
         var isMarker = isBlock || item is { EndBlock: true };
-        var isSection = !isMarker && item is { Section: not null, Spacer: false, IncludeItems: false };
-        var isDrives = !isMarker && item is { Drives: true, Spacer: false, Section: null, IncludeItems: false };
-        var isValue = item != null && !isMarker && !item.Spacer && !item.IncludeItems && !isSection && !isDrives;
+        var isSection = !isMarker && item is { Section: not null, IsGap: false, IncludeItems: false };
+        var isDrives = !isMarker && item is { Drives: true, IsGap: false, Section: null, IncludeItems: false };
+        var isValue = item != null && !isMarker && !item.IsGap && !item.IncludeItems && !isSection && !isDrives;
 
         _labelCaption.Text = isBlock ? "Blockname" : isSection ? "Überschrift" : "Bezeichnung";
         _valueCaption.Text = "Value";
@@ -1979,6 +2056,8 @@ public sealed partial class MainForm : Form
         _itemLabel.Text = isBlock ? item!.Block : isSection ? item!.Section : isMarker ? "" : item?.Label ?? "";
         _itemValue.Text = isSection || isMarker ? "" : item?.Value ?? "";
         _itemHide.Checked = isValue && item!.HideIfEmpty;
+        _itemSeparator.Enabled = !isMarker && item is { IsGap: true };
+        _itemSeparator.Checked = !isMarker && item is { Separator: true };
         _itemOnlyOn.Enabled = _itemNotOn.Enabled = _itemWhen.Enabled = item is { EndBlock: false };
         _itemOnlyOn.Text = string.Join(", ", item?.OnlyOn ?? new());
         _itemNotOn.Text = string.Join(", ", item?.NotOn ?? new());
@@ -1988,7 +2067,7 @@ public sealed partial class MainForm : Form
 
         _loading = wasLoading;
         // Nicht den Wert der vorher gewaehlten Zeile stehen lassen, waehrend der neue ermittelt wird.
-        _itemCurrent.Text = item == null || item.Spacer || item.EndBlock ? "" : "wird ermittelt…";
+        _itemCurrent.Text = item == null || item.IsGap || item.EndBlock ? "" : "wird ermittelt…";
         ScheduleCurrentValues();
     }
 
@@ -2067,7 +2146,7 @@ public sealed partial class MainForm : Form
     private static string DescribeCurrentValue(AppConfig config, int index, ValueResolver resolver)
     {
         var item = config.Items[index];
-        if (item.EndBlock || item.Spacer)
+        if (item.EndBlock || item.IsGap)
         {
             return "";
         }
@@ -2166,7 +2245,12 @@ public sealed partial class MainForm : Form
         {
             item.Block = _itemLabel.Text;
         }
-        else if (item.Spacer || item.IncludeItems)
+        else if (item.IsGap)
+        {
+            item.Separator = _itemSeparator.Checked;
+            item.Spacer = !item.Separator;
+        }
+        else if (item.IncludeItems)
         {
             // nur Filter
         }
@@ -2204,7 +2288,7 @@ public sealed partial class MainForm : Form
         _config.Items.Insert(index, item);
         RefreshItems(index);
         Changed();
-        (item.Section != null || !item.Spacer && !item.Drives && !item.IncludeItems ? _itemLabel : null)?.Focus();
+        (item.Section != null || !item.IsGap && !item.Drives && !item.IncludeItems ? _itemLabel : null)?.Focus();
     }
 
     /// <summary>
@@ -2216,7 +2300,7 @@ public sealed partial class MainForm : Form
     private void AddBar()
     {
         var item = SelectedItem;
-        var isMarker = item != null && (item.Block != null || item.EndBlock || item.Spacer || item.IncludeItems || item.Section != null);
+        var isMarker = item != null && (item.Block != null || item.EndBlock || item.IsGap || item.IncludeItems || item.Section != null);
         if (item is { Drives: true } && !isMarker)
         {
             if (string.IsNullOrWhiteSpace(item.Bar))
@@ -2434,7 +2518,7 @@ public sealed partial class MainForm : Form
             // ist "Value" gesperrt. Deutlich sagen, statt scheinbar nichts zu tun.
             var item = SelectedItem;
             var reason = item == null ? "Es ist keine Zeile markiert."
-                : item.Spacer ? "Markiert ist ein Leerraum – der hat keinen Text."
+                : item.IsGap ? (item.Separator ? "Markiert ist ein Trennstrich – der hat keinen Text." : "Markiert ist ein Leerraum – der hat keinen Text.")
                 : item.EndBlock ? "Markiert ist ein Blockende – das hat keinen Text."
                 : item.IncludeItems ? "Markiert sind die zentralen Zeilen – ihr Inhalt kommt aus der zentralen Datei."
                 : $"Das Feld „{(ReferenceEquals(_lastItemTextBox, _itemValue) ? "Value" : ReferenceEquals(_lastItemTextBox, _itemWhen) ? "Nur wenn" : _labelCaption.Text)}“ ist bei dieser Zeile gesperrt.";

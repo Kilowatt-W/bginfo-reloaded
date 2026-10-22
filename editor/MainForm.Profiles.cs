@@ -914,7 +914,8 @@ public sealed partial class MainForm
             var captions = string.Equals(name, _profile, StringComparison.OrdinalIgnoreCase)
                 ? ProfileDifferences().Where(d => d.Differs).Select(d => d.Caption).ToList()
                 : overlay.SelectMany(pair => pair.Value is JsonObject block && pair.Key != "items"
-                    ? block.Select(child => pair.Key.Equals("fields", StringComparison.OrdinalIgnoreCase) ? $"Feld {{{child.Key}}}" : $"{pair.Key}.{child.Key}")
+                    ? block.Where(child => child.Value != null || !pair.Key.Equals("fields", StringComparison.OrdinalIgnoreCase))
+                        .Select(child => pair.Key.Equals("fields", StringComparison.OrdinalIgnoreCase) ? $"Feld {{{child.Key}}}" : $"{pair.Key}.{child.Key}")
                     : new[] { pair.Key.Equals("items", StringComparison.OrdinalIgnoreCase) ? "Zeilen des Panels" : pair.Key }).ToList();
             var row = new ListViewItem(new[]
             {

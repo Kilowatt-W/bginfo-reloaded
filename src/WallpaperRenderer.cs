@@ -43,6 +43,7 @@ public static class WallpaperRenderer
         var barFreeColor = PanelColor(config.Colors.BarFree, "colors.barFree");
         var shadowColor = PanelColor(panel.ShadowColor, "panel.shadowColor");
         var borderColor = PanelColor(config.Border.Color, "border.color");
+        var separatorColor = PanelColor(config.Colors.Separator, "colors.separator");
 
         var toScreen = config.Wallpaper.Fit != WallpaperFit.None;
         using Bitmap image = toScreen
@@ -275,7 +276,16 @@ public static class WallpaperRenderer
                 }
                 drawnRows.Add((line, y, height));
 
-                if (line.Kind == LineKind.Section)
+                if (line.Separator)
+                {
+                    // In der Mitte des Leerraums, um ein Fuenftel der Zeilenhoehe angehoben wie die Rahmen -
+                    // Text steht oben in seiner Zeile, so wirkt der Strich mittig zwischen den Texten.
+                    var thickness = Math.Max(1, (int)Math.Round(Math.Max(1, panel.SeparatorWidth) * layout.Scale));
+                    var lineY = y + height / 2 - Math.Max(1, layout.ValueLineHeight / 5) + thickness / 2;
+                    using var separatorPen = new Pen(separatorColor, thickness);
+                    graphics.DrawLine(separatorPen, panelX + padding, lineY, panelX + panelWidth - padding, lineY);
+                }
+                else if (line.Kind == LineKind.Section)
                 {
                     DrawTextIfAny(line.Label, layout.HeaderFont, headerBrush, panelX + padding, y, innerWidth, height);
                 }

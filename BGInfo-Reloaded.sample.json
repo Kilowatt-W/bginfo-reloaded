@@ -114,7 +114,7 @@
     { "label": "Betriebssystem", "value": "{betriebssystem}" },
     { "label": "Letzter Boot", "value": "{boot}" },
     { "label": "Laufzeit", "value": "{uptime}" },
-    { "spacer": true },
+    { "separator": true },   // Trennstrich (Farbe colors.separator, Staerke panel.separatorWidth); "spacer": true = nur Leerraum
 
     { "section": "HARDWARE" },
     { "label": "Modell", "value": "{manufacturer} {model}" },

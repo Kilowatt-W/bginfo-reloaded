@@ -213,6 +213,8 @@ echtes Windows nötig, das in dieser Entwicklungsumgebung nicht zur Verfügung s
   vom Standardprofil (der Datei ohne `profiles`). `WithProfile` setzt zusammen (`MergeInto`: Blöcke
   der obersten Ebene Wert für Wert, alles darunter und Listen als Ganzes), `StoreProfile`/`Diff`
   rechnen zurück – beide genau eine Ebene tief halten, sonst gehen z. B. Feldbezeichnungen verloren.
+  Eigene Felder (`IsInheritedBlock`) gelten in jedem Profil: `Diff` schreibt dort kein `null`, und
+  `MergeInto` übergeht `null` (Dateien von 2.19.0 enthalten solche Einträge).
   `configFormat`, `hosts`, `profiles` (`FileOnlyKeys`) gelten nur für die Datei. Fehlt
   `configFormat` beim Lesen (Datei vor 2.19), macht `UpgradeFromFormat1` aus Gruppen ohne
   `config` `mode: Exclude` – früher hieß das „kein Panel“. Der Editor schreibt für Profil und

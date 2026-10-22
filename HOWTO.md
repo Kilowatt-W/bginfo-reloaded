@@ -386,7 +386,7 @@ Reiter „Aussehen“, Schieberegler mit Zahlenfeld „Gesamt-Deckkraft“.
 }
 ```
 
-- `Sections`: ein Kasten je Überschrift mit ihren Zeilen; ein Leerraum (`spacer`) trennt die Kästen
+- `Sections`: ein Kasten je Überschrift mit ihren Zeilen; ein Leerraum (`spacer`, auch `separator`) trennt die Kästen
   sichtbar, ohne Leerraum stoßen sie aneinander.
 - `Rows`: Gitter um jede Zeile mit Bezeichnung und Wert, mit Trennlinie zwischen den Spalten;
   Überschriften bleiben frei.
@@ -676,6 +676,10 @@ sie den Wert nicht selbst festlegen.
 - Blöcke wie `panel`, `colors`, `font`, `wallpaper`, `format`, `border` werden **Wert für Wert**
   überlagert, `fields` **je Feld**. Listen wie `items` und alle übrigen Werte ersetzt das Profil als
   Ganzes. `null` nimmt einen Wert des Standardprofils heraus (z. B. `"include": null`).
+- **Eigene Felder des Standardprofils gelten in jedem Profil.** Ein Profil kann ihren Wert ändern
+  und eigene Felder hinzufügen, aber keines entfernen. Im Editor stehen sie in der Feldtabelle des
+  Profils grau mit der Herkunft „Standardprofil“; wer den Wert ändert, legt eine Abweichung im
+  Profil an („Profil (ändert Standard)“). Löschen lassen sie sich nur im Standardprofil.
 - `hosts` und `profiles` gelten nur für die ganze Datei und werden in einem Profil übergangen.
 - Welcher Rechner welches Profil bekommt, steht in den Gruppen (`"profile": "Name"`, Groß- und
   Kleinschreibung egal). Gibt es das Profil nicht, steht eine Warnung im Log, und es gilt das
@@ -716,6 +720,7 @@ Profil. Die Dateien selbst bleiben unverändert und können gelöscht werden, so
 |---|---|
 | `{ "section": "TEXT" }` | Überschrift |
 | `{ "spacer": true }` | Leerraum |
+| `{ "separator": true }` | Trennstrich: Leerraum mit einer Linie in der Mitte über die Breite des Panels – Farbe `colors.separator` (Standard `#FFFFFF60`), Stärke `panel.separatorWidth` (Pixel, Standard 1, wird wie das Panel skaliert). Im Editor „+ Trennstrich“ oder bei einem Leerraum „Als Trennstrich zeichnen“; Farbe und Stärke im Reiter „Aussehen“ |
 | `{ "label": "…", "value": "…" }` | normale Zeile |
 | `{ "label": "…", "value": "…", "hideIfEmpty": true }` | Zeile entfällt, wenn der Wert leer oder `n/a` ist |
 | `{ "drives": true }` | eine Zeile je Festplatte |

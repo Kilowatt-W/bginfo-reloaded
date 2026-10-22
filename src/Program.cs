@@ -392,7 +392,7 @@ static class EntryPoint
         {
             foreach (var line in lines)
             {
-                Console.WriteLine(line.Kind == LineKind.Section ? $"  {line.Label}" : $"    {line.Label,-20} {line.Value}");
+                Console.WriteLine(line.Separator ? "  " + new string('-', 30) : line.Kind == LineKind.Section ? $"  {line.Label}" : $"    {line.Label,-20} {line.Value}");
             }
         }
 

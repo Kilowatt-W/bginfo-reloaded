@@ -12,7 +12,7 @@ public enum LineKind
 }
 
 /// <param name="Bar">Balken unter bzw. statt des Werts: Anteil 0 bis 1 (belegt), null = kein Balken.</param>
-public sealed record InfoLine(LineKind Kind, string Label, string Value = "", double? Bar = null);
+public sealed record InfoLine(LineKind Kind, string Label, string Value = "", double? Bar = null, bool Separator = false);
 
 /// <summary>
 /// Baut aus den "items" der Konfiguration die fertigen Panel-Zeilen. Die eigentlichen Werte kommen
@@ -61,9 +61,10 @@ public static class SystemInfoCollector
                 continue;
             }
 
-            if (item.Spacer)
+            if (item.IsGap)
             {
-                lines.Add(new InfoLine(LineKind.Section, ""));
+                // Ein Trennstrich ist ein Leerraum mit Linie - fuer Hoehe und Rahmen gilt dasselbe.
+                lines.Add(new InfoLine(LineKind.Section, "", Separator: item.Separator));
             }
             else if (item.Section != null)
             {

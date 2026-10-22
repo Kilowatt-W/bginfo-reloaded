@@ -399,7 +399,7 @@ slider with number field “Gesamt-Deckkraft”.
 }
 ```
 
-- `Sections`: one box per heading with its lines; a spacer separates the boxes visibly, without a
+- `Sections`: one box per heading with its lines; a spacer (also `separator`) separates the boxes visibly, without a
   spacer they touch.
 - `Rows`: a grid around every line with label and value, with a divider between the columns;
   headings stay free.
@@ -687,6 +687,11 @@ they do not set the value themselves.
 - Blocks like `panel`, `colors`, `font`, `wallpaper`, `format`, `border` are overlaid **value by
   value**, `fields` **per field**. Lists like `items` and all other values are replaced by the
   profile as a whole. `null` removes a value of the default profile (e.g. `"include": null`).
+- **Custom fields of the default profile apply in every profile.** A profile can change their value
+  and add fields of its own, but cannot remove one. In the editor they appear grey in the profile's
+  field table with the origin “Standardprofil” (default profile); changing the value creates a
+  difference in the profile (“Profil (ändert Standard)”). They can only be deleted in the default
+  profile.
 - `hosts` and `profiles` apply to the whole file only and are ignored inside a profile.
 - Which machine gets which profile is set in the groups (`"profile": "Name"`, upper and lower case
   do not matter). If the profile does not exist, the log gets a warning and the default profile
@@ -726,6 +731,7 @@ themselves stay unchanged and can be deleted once everything is fine.
 |---|---|
 | `{ "section": "TEXT" }` | heading |
 | `{ "spacer": true }` | spacer |
+| `{ "separator": true }` | separator line: a spacer with a line through the middle across the panel width – colour `colors.separator` (default `#FFFFFF60`), thickness `panel.separatorWidth` (pixels, default 1, scaled like the panel). In the editor “+ Trennstrich” or, on a spacer, “Als Trennstrich zeichnen” (draw as separator line); colour and thickness in the tab “Aussehen” |
 | `{ "label": "…", "value": "…" }` | normal line |
 | `{ "label": "…", "value": "…", "hideIfEmpty": true }` | the line is omitted if the value is empty or `n/a` |
 | `{ "drives": true }` | one line per hard disk |

@@ -53,6 +53,8 @@ internal static class ConfigWriter
         ["colors.barUsed"] = "Balken (\"bar\" einer Zeile): belegter Teil",
         ["colors.barFree"] = "Balken: freier Teil",
         ["panel.barHeight"] = "Höhe der Balken in Pixeln",
+        ["panel.separatorWidth"] = "Stärke der Trennstriche (\"separator\") in Pixeln",
+        ["colors.separator"] = "Trennstrich zwischen Zeilen (\"separator\": true)",
         ["panel.opacity"] = "Gesamt-Deckkraft in Prozent (0 bis 100), verrechnet mit allen eingestellten Deckkräften",
         ["wallpaper.path"] = "festes Hintergrundbild; relativ zum Ordner dieser Datei; weglassen = Wallpaper des Benutzers",
         ["wallpaper.originalPath"] = "nur zur Information: von hier wurde das Bild beim ersten Start übernommen",
@@ -94,7 +96,7 @@ internal static class ConfigWriter
         },
         ["items"] = new[]
         {
-            "Zeilen des Panels: \"section\" (Überschrift), \"spacer\" (Leerraum), \"drives\" (eine Zeile je Festplatte),",
+            "Zeilen des Panels: \"section\" (Überschrift), \"spacer\" (Leerraum), \"separator\" (Trennstrich), \"drives\" (eine Zeile je Festplatte),",
             "\"label\"/\"value\" (normale Zeile, \"hideIfEmpty\" lässt sie bei leerem Wert weg), \"includeItems\" (Zeilen der zentralen Datei).",
             "Filter für jeden Eintrag: \"onlyOn\" / \"notOn\" (Rechnernamen-Muster oder IP-Angaben wie bei hosts), \"when\" (Bedingung mit Platzhaltern).",
             "\"split\" teilt den Wert an Trennzeichen in mehrere Zeilen untereinander, z. B. \", \" bei mehreren Grafikkarten (mehrere mit | getrennt).",
@@ -117,6 +119,7 @@ internal static class ConfigWriter
     private static readonly string[] FormerComments =
     {
         "GitHub-Repository (owner/name) für --update aus Releases; nur auf Aufruf, nie automatisch",
+        "Zeilen des Panels: \"section\" (Überschrift), \"spacer\" (Leerraum), \"drives\" (eine Zeile je Festplatte),",
         "Rechnergruppen, von oben nach unten geprüft - die erste passende entscheidet: \"config\" = eigene Datei, ohne \"config\" = kein Panel (Blacklist), \"mode\": \"ThisConfig\" = diese Datei. \"match\": Namen mit * und ? an jeder Stelle (*-ts-*, mh-??-xama), Groß-/Kleinschreibung egal, IP (10.1.1.5), Netz (10.1.0.0/16), Bereich (10.1.1.10-50); \"matchFile\": Liste aus einer Datei",
         "  BGInfo-Reloaded.exe --config \\\\server\\share\\BGInfo-Reloaded.json   (bzw. https://...)",
         "Whitelist: wenn nicht leer, Panel nur auf passenden Rechnern (* und ? erlaubt)",
