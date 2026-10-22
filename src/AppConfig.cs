@@ -580,6 +580,13 @@ public sealed class WallpaperConfig
 /// Ein Eintrag im Panel. Genau eine der Varianten: "section" (Ueberschrift), "spacer" (Leerraum),
 /// "drives" (eine Zeile je Festplatte) oder "label"/"value" (normale Zeile mit Platzhaltern).
 /// </summary>
+/// <summary>Wo eine Zeile des Standardprofils in Profilen mit eigenen Zeilen erscheint.</summary>
+public enum SharedPosition
+{
+    Top,
+    Bottom
+}
+
 public sealed class ItemConfig
 {
     // Nur hier werden false-Werte beim Schreiben weggelassen (alle drei haben false als Standard) -
@@ -596,6 +603,13 @@ public sealed class ItemConfig
     /// <summary>Leerraum oder Trennstrich - eine Zeile ohne Text.</summary>
     [JsonIgnore]
     public bool IsGap => Spacer || Separator;
+
+    /// <summary>
+    /// Nur im Standardprofil: diese Zeile gilt auch in Profilen mit eigenen Zeilen - vor (Top) bzw.
+    /// nach (Bottom) deren Zeilen. Siehe <see cref="AppConfig.WithProfile"/>.
+    /// </summary>
+    [JsonPropertyOrder(1)]
+    public SharedPosition? AllProfiles { get; set; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool Drives { get; set; }
@@ -897,8 +911,16 @@ public sealed class AppConfig
         {
             node.Remove(fileOnly);
         }
-        MergeInto(node, Profiles![key]);
+        var overlay = Profiles![key];
+        MergeInto(node, overlay);
         var result = node.Deserialize<AppConfig>(JsonOptions)!;
+        if (overlay.Any(pair => pair.Key.Equals("items", StringComparison.OrdinalIgnoreCase)))
+        {
+            // Eigene Zeilen des Profils: die Zeilen des Standardprofils "fuer alle Profile" davor bzw. danach.
+            result.Items = SharedItems(SharedPosition.Top)
+                .Concat((result.Items ?? new()).Where(item => item.AllProfiles == null))
+                .Concat(SharedItems(SharedPosition.Bottom)).ToList();
+        }
         result.BaseDirectory = BaseDirectory;
         result.Hosts = Hosts;
         result.Profiles = null;
@@ -914,12 +936,26 @@ public sealed class AppConfig
     public string? FindProfile(string? name) =>
         name == null ? null : Profiles?.Keys.FirstOrDefault(k => string.Equals(k, name, StringComparison.OrdinalIgnoreCase));
 
-    /// <summary>Haelt <paramref name="effective"/> als Profil fest - gespeichert werden nur die Abweichungen von dieser Konfiguration.</summary>
+    /// <summary>
+    /// Haelt <paramref name="effective"/> als Profil fest - gespeichert werden nur die Abweichungen von
+    /// dieser Konfiguration. Weichen die Zeilen ab, kommen die gemeinsamen (<see cref="ItemConfig.AllProfiles"/>)
+    /// nicht mit ins Profil - die setzt <see cref="WithProfile"/> jedes Mal aus dem Standardprofil dazu.
+    /// </summary>
     public void StoreProfile(string name, AppConfig effective)
     {
         Profiles ??= new();
-        Profiles[FindProfile(name) ?? name] = Diff(effective.ToNode(), ToNode());
+        var node = effective.ToNode();
+        var baseline = ToNode();
+        if (!JsonNode.DeepEquals(node["items"], baseline["items"]))
+        {
+            node["items"] = JsonSerializer.SerializeToNode((effective.Items ?? new()).Where(item => item.AllProfiles == null).ToList(), JsonOptions);
+        }
+        Profiles[FindProfile(name) ?? name] = Diff(node, baseline);
     }
+
+    /// <summary>Kopien der Zeilen des Standardprofils, die an dieser Stelle in jedem Profil stehen.</summary>
+    public List<ItemConfig> SharedItems(SharedPosition position) =>
+        ItemsFromJson(ItemsToJson((Items ?? new()).Where(item => item.AllProfiles == position))) ?? new();
 
     /// <summary>Zeilen des Panels als JSON - fuer die Zwischenablage des Editors.</summary>
     public static string ItemsToJson(IEnumerable<ItemConfig> items) => JsonSerializer.Serialize(items, JsonOptions);

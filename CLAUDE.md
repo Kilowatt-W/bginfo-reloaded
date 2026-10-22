@@ -214,7 +214,12 @@ echtes Windows nötig, das in dieser Entwicklungsumgebung nicht zur Verfügung s
   der obersten Ebene Wert für Wert, alles darunter und Listen als Ganzes), `StoreProfile`/`Diff`
   rechnen zurück – beide genau eine Ebene tief halten, sonst gehen z. B. Feldbezeichnungen verloren.
   Eigene Felder (`IsInheritedBlock`) gelten in jedem Profil: `Diff` schreibt dort kein `null`, und
-  `MergeInto` übergeht `null` (Dateien von 2.19.0 enthalten solche Einträge).
+  `MergeInto` übergeht `null` (Dateien von 2.19.0 enthalten solche Einträge). Zeilen mit
+  `ItemConfig.AllProfiles` (nur im Standardprofil sinnvoll) setzt `WithProfile` vor bzw. hinter die
+  eigenen Zeilen eines Profils; `StoreProfile` nimmt sie dafür vor dem Vergleich heraus. Kopien von
+  Zeilen verlieren die Markierung (sonst stünden sie doppelt). Die Zeilenliste im Editor ist
+  `MultiExtended` und selbst gezeichnet (`SetUpSharedItems`); `SelectedIndex` ist dort die erste
+  markierte Zeile, und das Ersetzen eines Eintrags hebt seine Markierung auf (`SetSelected` danach).
   `configFormat`, `hosts`, `profiles` (`FileOnlyKeys`) gelten nur für die Datei. Fehlt
   `configFormat` beim Lesen (Datei vor 2.19), macht `UpgradeFromFormat1` aus Gruppen ohne
   `config` `mode: Exclude` – früher hieß das „kein Panel“. Der Editor schreibt für Profil und

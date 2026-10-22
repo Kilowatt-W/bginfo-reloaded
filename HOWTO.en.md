@@ -88,10 +88,12 @@ The tabs and buttons (German labels in parentheses):
   differences) puts every setting next to the default profile and resets checked ones to its value.
   The menu “Profile” creates, renames and deletes profiles and takes over other configuration files
   as profiles.
-- **Copying between profiles:** in the line list Ctrl+C copies the selected line (a block start
-  together with its block), Ctrl+V pastes it – also in another profile or editor window. The context
-  menu “In Profil kopieren” appends lines directly to another profile; the field table has the same
-  for fields (“Felder in Profil kopieren”).
+- **Copying between profiles:** in the line list several lines can be selected with Ctrl or Shift.
+  Ctrl+C copies them (a block start together with its block), Ctrl+V pastes them – also in another
+  profile or editor window. The context menu “In Profile kopieren…” copies them into one or more
+  profiles, at the start or at the end; the field table has the same for fields (“Felder in Profile
+  kopieren…”). The context menu also has “Für alle Profile: oben / unten” (see
+  [Profiles](#profiles-several-configurations-in-one-file-profiles)).
 - **File and fields (Datei und Felder):** version and description of the file, central file
   (`include`), custom fields.
 - **Autostart and tools (Autostart und Werkzeuge):** set up and remove the autostart tasks
@@ -687,6 +689,12 @@ they do not set the value themselves.
 - Blocks like `panel`, `colors`, `font`, `wallpaper`, `format`, `border` are overlaid **value by
   value**, `fields` **per field**. Lists like `items` and all other values are replaced by the
   profile as a whole. `null` removes a value of the default profile (e.g. `"include": null`).
+- **Shared lines:** lines of the default profile with `"allProfiles": "Top"` or `"Bottom"` also
+  appear in every profile with its own lines – before or after them, in their order (e.g. the
+  computer name at the top, boot time and uptime at the bottom). In the default profile itself they
+  stay where they are. In the editor: select lines, right-click → “Für alle Profile: oben” / “unten”
+  (for all profiles: top / bottom; a block start takes its block along). In a profile they appear
+  grey with “[aus dem Standardprofil]” and can only be changed in the default profile.
 - **Custom fields of the default profile apply in every profile.** A profile can change their value
   and add fields of its own, but cannot remove one. In the editor they appear grey in the profile's
   field table with the origin “Standardprofil” (default profile); changing the value creates a
@@ -796,6 +804,7 @@ environment variables in plain text – do not pass it on unchecked if credentia
 | `{now}` | current date and time |
 | `{appversion}` | version of BGInfo-Reloaded |
 | `{configversion}` | version of the configuration file – the value of `"version"` at the very top of the file |
+| `{profile}` | the profile that applies on this machine (see [Profiles](#profiles-several-configurations-in-one-file-profiles)), otherwise `Standardprofil`; in the editor the one being edited |
 
 **Generic – for extending without a rebuild**
 

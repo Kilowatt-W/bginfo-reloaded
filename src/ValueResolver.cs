@@ -35,7 +35,13 @@ public sealed class ValueResolver
     /// <summary>Mit den eigenen Feldern und der Version der Konfiguration, fuer die aufgeloest wird.</summary>
     public ValueResolver(AppConfig config) : this(config.Fields, config.Version, config.Format)
     {
+        _profileName = config.ActiveProfile;
     }
+
+    /// <summary>Das Profil, aus dem die Konfiguration stammt - null = Standardprofil.</summary>
+    private readonly string? _profileName;
+
+    public const string StandardProfileName = "Standardprofil";
 
     // Datums- und Zahlenformat dieser Konfiguration; gilt auf dem Thread, auf dem aufgeloest wird.
     private readonly FormatConfig _format;
@@ -150,7 +156,9 @@ public sealed class ValueResolver
         new("now", "Aktuelles Datum und Uhrzeit", () => ValueFormat.FormatDateTime(DateTime.Now)),
         new("appversion", "Version von BGInfo-Reloaded", () => GitHubUpdater.CurrentVersion.ToString()),
         // Den Wert liefert ResolveUncached aus der Konfiguration; hier steht nur der Rueckfall ohne Angabe.
-        new("configversion", "Version der Konfigurationsdatei (\"version\")", () => NotAvailable)
+        new("configversion", "Version der Konfigurationsdatei (\"version\")", () => NotAvailable),
+        // Wie configversion: den Namen liefert ResolveUncached aus der Konfiguration.
+        new("profile", "Profil, das auf diesem Rechner gilt (sonst \"Standardprofil\")", () => StandardProfileName)
     };
 
     public string Expand(string? template)
@@ -209,6 +217,10 @@ public sealed class ValueResolver
         if (token.Equals("configversion", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(_configVersion))
         {
             return _configVersion.Trim();
+        }
+        if (token.Equals("profile", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(_profileName))
+        {
+            return _profileName;
         }
 
         // Eigene Felder haben Vorrang vor eingebauten Namen. Innerhalb der eigenen Definition meint

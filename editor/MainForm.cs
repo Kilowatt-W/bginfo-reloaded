@@ -571,17 +571,27 @@ public sealed partial class MainForm : Form
             }
         };
         // Kopieren zwischen Profilen und Editorfenstern; ein Blockanfang nimmt den ganzen Block mit.
+        // Mehrere Zeilen mit Strg bzw. Umschalt markieren.
+        _items.SelectionMode = SelectionMode.MultiExtended;
+        SetUpSharedItems();
         var itemMenu = new ContextMenuStrip();
-        itemMenu.Items.Add("Zeile kopieren (Strg+C)", null, (_, _) => CopyItems());
+        itemMenu.Items.Add("Zeilen kopieren (Strg+C)", null, (_, _) => CopyItems());
         itemMenu.Items.Add("Einfügen (Strg+V)", null, (_, _) => PasteItems());
-        itemMenu.Items.Add(CopyToProfileMenu("In Profil kopieren", CopyItemsToProfile));
+        itemMenu.Items.Add("In Profile kopieren…", null, (_, _) => CopyItemsToProfiles());
+        itemMenu.Items.Add(new ToolStripSeparator());
+        var shareTop = itemMenu.Items.Add("Für alle Profile: oben", null, (_, _) => SetShared(SharedPosition.Top));
+        var shareBottom = itemMenu.Items.Add("Für alle Profile: unten", null, (_, _) => SetShared(SharedPosition.Bottom));
+        var shareNone = itemMenu.Items.Add("Nicht mehr für alle Profile", null, (_, _) => SetShared(null));
+        itemMenu.Opening += (_, _) => shareTop.Enabled = shareBottom.Enabled = shareNone.Enabled = _profile == null;
         _items.ContextMenuStrip = itemMenu;
         _items.MouseDown += (_, e) =>
         {
-            // Rechtsklick markiert die Zeile darunter, damit das Menue fuer sie gilt.
+            // Rechtsklick auf eine nicht markierte Zeile markiert nur sie, damit das Menue fuer sie gilt;
+            // auf eine markierte bleibt die Mehrfachauswahl stehen.
             var index = _items.IndexFromPoint(e.Location);
-            if (e.Button == MouseButtons.Right && index >= 0)
+            if (e.Button == MouseButtons.Right && index >= 0 && !_items.GetSelected(index))
             {
+                _items.ClearSelected();
                 _items.SelectedIndex = index;
             }
         };
@@ -1535,9 +1545,9 @@ public sealed partial class MainForm : Form
         var fieldMenu = new ContextMenuStrip();
         fieldMenu.Items.Add("Felder kopieren (Strg+C)", null, (_, _) => CopyFields());
         fieldMenu.Items.Add("Felder einfügen (Strg+V)", null, (_, _) => PasteFields());
-        fieldMenu.Items.Add(CopyToProfileMenu("Felder in Profil kopieren", target => CopyFieldsToProfile(target,
+        fieldMenu.Items.Add("Felder in Profile kopieren…", null, (_, _) => CopyFieldsToProfiles(
             _fields.SelectedCells.Cast<DataGridViewCell>().Select(cell => cell.OwningRow).Distinct().Where(row => !row.IsNewRow)
-                .Select(row => (row.Cells[0].Value as string ?? "").Trim().Trim('{', '}')).Where(_config.Fields.ContainsKey).ToList())));
+                .Select(row => (row.Cells[0].Value as string ?? "").Trim().Trim('{', '}')).Where(_config.Fields.ContainsKey).ToList()));
         _fields.ContextMenuStrip = fieldMenu;
 
         var wmi = new Button { Text = "WMI-Abfrage in die Definition einfügen…", AutoSize = true };
@@ -1976,7 +1986,7 @@ public sealed partial class MainForm : Form
         return Math.Max(0, depth);
     }
 
-    private string DescribeAt(int index) => new string(' ', BlockDepth(index) * 6) + Describe(_config.Items[index]);
+    private string DescribeAt(int index) => new string(' ', BlockDepth(index) * 6) + Describe(_config.Items[index]) + SharedSuffix(_config.Items[index]);
 
     private static string DescribeContent(ItemConfig item)
     {
@@ -2064,6 +2074,7 @@ public sealed partial class MainForm : Form
         _itemWhen.Text = item?.When ?? "";
         _itemLabel.PlaceholderText = isDrives ? "Standard: Laufwerk {drive}" : "";
         _itemValue.PlaceholderText = isDrives ? "Standard: {used} GB / {total} GB belegt ({free} GB frei)" : "";
+        ShowSharedState(item);
 
         _loading = wasLoading;
         // Nicht den Wert der vorher gewaehlten Zeile stehen lassen, waehrend der neue ermittelt wird.
@@ -2090,6 +2101,7 @@ public sealed partial class MainForm : Form
         var generation = ++_currentGeneration;
         var index = _items.SelectedIndex;
         var json = _config.ToJson();
+        var profile = _profile;
         var baseDirectory = ConfigDirectory;
 
         try
@@ -2098,6 +2110,7 @@ public sealed partial class MainForm : Form
             {
                 var config = AppConfig.FromJson(json, "Editor");
                 config.BaseDirectory = baseDirectory;
+                config.ActiveProfile = profile; // {profile} zeigt das bearbeitete Profil
                 var ownFields = config.Fields.Keys.ToList();
                 try
                 {
@@ -2222,7 +2235,7 @@ public sealed partial class MainForm : Form
     private void EditSelectedItem()
     {
         var item = SelectedItem;
-        if (_loading || item == null)
+        if (_loading || item == null || IsLockedItem(_items.SelectedIndex))
         {
             return;
         }
@@ -2277,7 +2290,10 @@ public sealed partial class MainForm : Form
         }
 
         _loading = true;
-        _items.Items[_items.SelectedIndex] = DescribeAt(_items.SelectedIndex);
+        var shown = _items.SelectedIndex;
+        _items.Items[shown] = DescribeAt(shown);
+        // Bei Mehrfachauswahl verliert der ersetzte Eintrag seine Markierung - sonst ginge der naechste Tastendruck ins Leere.
+        _items.SetSelected(shown, true);
         _loading = false;
         Changed();
     }
@@ -2323,13 +2339,22 @@ public sealed partial class MainForm : Form
 
     private void RemoveItem()
     {
-        var index = _items.SelectedIndex;
-        if (index >= 0)
+        var indices = SelectedItemIndices();
+        var removable = indices.Where(i => !IsLockedItem(i)).ToList();
+        if (removable.Count < indices.Count)
+        {
+            _status.Text = "Zeilen aus dem Standardprofil „für alle Profile“ lassen sich nur dort entfernen.";
+        }
+        if (removable.Count == 0)
+        {
+            return;
+        }
+        foreach (var index in removable.OrderByDescending(i => i))
         {
             _config.Items.RemoveAt(index);
-            RefreshItems(index);
-            Changed();
         }
+        RefreshItems(removable[0]);
+        Changed();
     }
 
     private void MoveItem(int direction)
@@ -2805,6 +2830,7 @@ public sealed partial class MainForm : Form
     {
         _tagsStale = false;
         var json = _config.ToJson();
+        var profile = _profile;
         var baseDirectory = ConfigDirectory;
         try
         {
@@ -2813,6 +2839,7 @@ public sealed partial class MainForm : Form
                 // Eigene Felder zuerst - samt denen der zentralen Datei, wie sie auch zur Laufzeit gelten.
                 var config = AppConfig.FromJson(json, "Editor");
                 config.BaseDirectory = baseDirectory;
+                config.ActiveProfile = profile;
                 var local = new HashSet<string>(config.Fields.Keys, StringComparer.OrdinalIgnoreCase);
                 try
                 {

@@ -80,10 +80,12 @@ BGInfo-Reloaded-Editor.exe BGInfo-Reloaded.json      eine vorhandene Datei öffn
   jede Einstellung dem Standardprofil gegenüber und setzt markierte wieder auf dessen Wert zurück.
   Das Menü „Profile“ legt Profile an, benennt sie um, löscht sie und übernimmt andere
   Konfigurationsdateien als Profile.
-- **Kopieren zwischen Profilen:** in der Zeilenliste kopiert Strg+C die markierte Zeile (ein
-  Blockanfang samt Block), Strg+V fügt sie ein – auch in einem anderen Profil oder Editorfenster.
-  Das Kontextmenü „In Profil kopieren“ hängt Zeilen direkt an ein anderes Profil an; in der
-  Feldtabelle gibt es dasselbe für Felder („Felder in Profil kopieren“).
+- **Kopieren zwischen Profilen:** in der Zeilenliste lassen sich mit Strg bzw. Umschalt mehrere
+  Zeilen markieren. Strg+C kopiert sie (ein Blockanfang samt Block), Strg+V fügt sie ein – auch in
+  einem anderen Profil oder Editorfenster. Das Kontextmenü „In Profile kopieren…“ kopiert sie in ein
+  oder mehrere Profile, wahlweise an den Anfang oder ans Ende; in der Feldtabelle gibt es dasselbe
+  für Felder („Felder in Profile kopieren…“). Dort sind auch die Einträge „Für alle Profile: oben /
+  unten“ (siehe [Profile](#profile-mehrere-konfigurationen-in-einer-datei-profiles)).
 - **Datei und Felder:** Version und Beschreibung der Datei, zentrale Datei (`include`), eigene Felder.
 - **Autostart und Werkzeuge:** Autostart-Tasks einrichten und entfernen (Intervall, `--watch`),
   Vorschau als Bilddatei speichern, Logdatei und Datenordner öffnen.
@@ -676,6 +678,12 @@ sie den Wert nicht selbst festlegen.
 - Blöcke wie `panel`, `colors`, `font`, `wallpaper`, `format`, `border` werden **Wert für Wert**
   überlagert, `fields` **je Feld**. Listen wie `items` und alle übrigen Werte ersetzt das Profil als
   Ganzes. `null` nimmt einen Wert des Standardprofils heraus (z. B. `"include": null`).
+- **Gemeinsame Zeilen:** Zeilen des Standardprofils mit `"allProfiles": "Top"` bzw. `"Bottom"` stehen
+  auch in jedem Profil mit eigenen Zeilen – davor bzw. danach, in ihrer Reihenfolge (z. B. der
+  Rechnername oben, Boot und Laufzeit unten). Im Standardprofil selbst bleiben sie, wo sie stehen.
+  Im Editor: Zeilen markieren, Rechtsklick → „Für alle Profile: oben“ / „unten“ (ein Blockanfang
+  nimmt seinen Block mit). In einem Profil erscheinen sie grau mit „[aus dem Standardprofil]“ und
+  lassen sich nur im Standardprofil ändern.
 - **Eigene Felder des Standardprofils gelten in jedem Profil.** Ein Profil kann ihren Wert ändern
   und eigene Felder hinzufügen, aber keines entfernen. Im Editor stehen sie in der Feldtabelle des
   Profils grau mit der Herkunft „Standardprofil“; wer den Wert ändert, legt eine Abweichung im
@@ -786,6 +794,7 @@ stehen.
 | `{now}` | aktuelles Datum und Uhrzeit |
 | `{appversion}` | Version von BGInfo-Reloaded |
 | `{configversion}` | Version der Konfigurationsdatei – der Wert von `"version"` ganz oben in der Datei |
+| `{profile}` | das Profil, das auf diesem Rechner gilt (siehe [Profile](#profile-mehrere-konfigurationen-in-einer-datei-profiles)), sonst `Standardprofil`; im Editor das gerade bearbeitete |
 
 **Generisch – zum Erweitern ohne Neubau**
 

@@ -981,28 +981,43 @@ public sealed partial class MainForm
 
     // ------------------------------------------------------------------ Kopieren zwischen Profilen
 
-    /// <summary>Die markierte Zeile - bei einem Blockanfang samt Inhalt und Blockende.</summary>
-    private List<ItemConfig> ItemsToCopy()
+    /// <summary>Die markierten Zeilen in Listenreihenfolge.</summary>
+    private List<int> SelectedItemIndices() =>
+        _items.SelectedIndices.Cast<int>().Where(i => i < _config.Items.Count).OrderBy(i => i).ToList();
+
+    /// <summary>Die markierten Zeilen samt dem Inhalt markierter Blockanfaenge (bis zum Blockende) - als Indizes.</summary>
+    private List<int> SelectedItemsWithBlocks()
     {
-        var index = _items.SelectedIndex;
-        if (index < 0 || index >= _config.Items.Count)
+        var result = new SortedSet<int>();
+        foreach (var index in SelectedItemIndices())
         {
-            return new();
-        }
-        var end = index;
-        if (_config.Items[index].Block != null)
-        {
+            result.Add(index);
+            if (_config.Items[index].Block == null)
+            {
+                continue;
+            }
             for (int i = index + 1, depth = 1; i < _config.Items.Count; i++)
             {
+                result.Add(i);
                 depth += _config.Items[i].Block != null ? 1 : _config.Items[i].EndBlock ? -1 : 0;
                 if (depth == 0)
                 {
-                    end = i;
                     break;
                 }
             }
         }
-        return AppConfig.ItemsFromJson(AppConfig.ItemsToJson(_config.Items.GetRange(index, end - index + 1))) ?? new();
+        return result.ToList();
+    }
+
+    /// <summary>
+    /// Kopien der markierten Zeilen (Bloecke vollstaendig). Ohne die Markierung "fuer alle Profile" - als
+    /// Kopie sind sie gewoehnliche Zeilen, sonst stuenden sie doppelt da.
+    /// </summary>
+    private List<ItemConfig> ItemsToCopy()
+    {
+        var copies = AppConfig.ItemsFromJson(AppConfig.ItemsToJson(SelectedItemsWithBlocks().Select(i => _config.Items[i]))) ?? new();
+        copies.ForEach(item => item.AllProfiles = null);
+        return copies;
     }
 
     private void CopyItems()
@@ -1029,24 +1044,188 @@ public sealed partial class MainForm
             _status.Text = "In der Zwischenablage stehen keine Zeilen des Panels.";
             return;
         }
-        var index = _items.SelectedIndex + 1;
+        items.ForEach(item => item.AllProfiles = null);
+        var index = SelectedItemIndices().DefaultIfEmpty(-1).Max() + 1;
         _config.Items.InsertRange(index, items);
         RefreshItems(index);
         Changed();
         _status.Text = $"{items.Count} Zeile(n) eingefügt.";
     }
 
-    /// <summary>Haengt Zeilen an ein anderes Profil an (bzw. an das Standardprofil).</summary>
-    private void CopyItemsToProfile(string? target)
+    /// <summary>Kopiert die markierten Zeilen in ein oder mehrere andere Profile - an den Anfang oder ans Ende.</summary>
+    private void CopyItemsToProfiles()
     {
         var items = ItemsToCopy();
         if (items.Count == 0)
         {
-            _status.Text = "Zuerst eine Zeile markieren.";
+            _status.Text = "Zuerst Zeilen markieren (mehrere mit Strg bzw. Umschalt).";
             return;
         }
-        ChangeProfile(target, config => config.Items.AddRange(items));
-        _status.Text = $"{items.Count} Zeile(n) ans Ende von {DescribeProfile(target)} kopiert.";
+        if (AskTargetProfiles($"{items.Count} Zeile(n) in Profile kopieren", withPosition: true) is not { } choice)
+        {
+            return;
+        }
+        foreach (var target in choice.Targets)
+        {
+            var copies = AppConfig.ItemsFromJson(AppConfig.ItemsToJson(items))!;
+            ChangeProfile(target, config =>
+            {
+                if (choice.AtStart)
+                {
+                    // Hinter die gemeinsamen Zeilen "oben", sonst landeten die Kopien davor.
+                    var start = config.Items.TakeWhile(item => item.AllProfiles == SharedPosition.Top).Count();
+                    config.Items.InsertRange(start, copies);
+                }
+                else
+                {
+                    var end = config.Items.Count - Enumerable.Reverse(config.Items).TakeWhile(item => item.AllProfiles == SharedPosition.Bottom).Count();
+                    config.Items.InsertRange(end, copies);
+                }
+            });
+        }
+        _status.Text = $"{items.Count} Zeile(n) {(choice.AtStart ? "an den Anfang" : "ans Ende")} kopiert: {string.Join(", ", choice.Targets.Select(DescribeProfile))}.";
+    }
+
+    /// <summary>Kopiert Felder in ein oder mehrere andere Profile.</summary>
+    private void CopyFieldsToProfiles(List<string> names)
+    {
+        if (names.Count == 0)
+        {
+            _status.Text = "Zuerst Felder in der Tabelle markieren.";
+            return;
+        }
+        if (AskTargetProfiles($"{names.Count} Feld(er) in Profile kopieren", withPosition: false) is not { } choice)
+        {
+            return;
+        }
+        foreach (var target in choice.Targets)
+        {
+            CopyFieldsToProfile(target, names);
+        }
+    }
+
+    /// <summary>Auswahl der Zielprofile (Standardprofil und alle ausser dem bearbeiteten), fuer Zeilen auch Anfang oder Ende.</summary>
+    private (List<string?> Targets, bool AtStart)? AskTargetProfiles(string title, bool withPosition)
+    {
+        var candidates = new List<string?> { null };
+        candidates.AddRange(_root.Profiles?.Keys ?? Enumerable.Empty<string>());
+        candidates.RemoveAll(t => string.Equals(t, _profile, StringComparison.OrdinalIgnoreCase));
+        if (candidates.Count == 0)
+        {
+            _status.Text = "Es gibt kein weiteres Profil.";
+            return null;
+        }
+        using var dialog = new Form
+        {
+            Text = title, FormBorderStyle = FormBorderStyle.FixedDialog, MinimizeBox = false, MaximizeBox = false, ShowInTaskbar = false,
+            StartPosition = FormStartPosition.CenterParent, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(12), Font = Font
+        };
+        var layout = new TableLayoutPanel { AutoSize = true, ColumnCount = 1, Dock = DockStyle.Fill };
+        layout.Controls.Add(new Label { Text = "Kopieren nach:", AutoSize = true });
+        var list = new CheckedListBox { CheckOnClick = true, IntegralHeight = false, Width = LogicalToDeviceUnits(320) };
+        foreach (var candidate in candidates)
+        {
+            list.Items.Add(candidate ?? StandardProfileName, candidates.Count == 1);
+        }
+        list.Height = Math.Min(candidates.Count, 10) * list.ItemHeight + LogicalToDeviceUnits(6);
+        layout.Controls.Add(list);
+        var position = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = LogicalToDeviceUnits(320), Visible = withPosition, Margin = new Padding(3, 10, 3, 3) };
+        position.Items.AddRange(new object[] { "Ans Ende der Zeilen (vor den gemeinsamen unten)", "An den Anfang (nach den gemeinsamen oben)" });
+        position.SelectedIndex = 0;
+        layout.Controls.Add(position);
+        var accept = new Button { Text = "Kopieren", DialogResult = DialogResult.OK, AutoSize = true };
+        var cancel = new Button { Text = "Abbrechen", DialogResult = DialogResult.Cancel, AutoSize = true };
+        var footer = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.RightToLeft, Dock = DockStyle.Fill, Margin = new Padding(0, 12, 0, 0) };
+        footer.Controls.Add(cancel);
+        footer.Controls.Add(accept);
+        layout.Controls.Add(footer);
+        dialog.Controls.Add(layout);
+        dialog.AcceptButton = accept;
+        dialog.CancelButton = cancel;
+        while (dialog.ShowDialog(this) == DialogResult.OK)
+        {
+            var targets = list.CheckedIndices.Cast<int>().Select(i => candidates[i]).ToList();
+            if (targets.Count == 0)
+            {
+                MessageBox.Show(dialog, "Bitte mindestens ein Profil anhaken.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                continue;
+            }
+            return (targets, position.SelectedIndex == 1);
+        }
+        return null;
+    }
+
+    // ------------------------------------------------------------------ Zeilen fuer alle Profile
+
+    /// <summary>Im Profil: eine Zeile, die aus dem Standardprofil "fuer alle Profile" kommt - nur dort zu aendern.</summary>
+    private bool IsLockedItem(int index) =>
+        _profile != null && index >= 0 && index < _config.Items.Count && _config.Items[index].AllProfiles != null;
+
+    private string SharedSuffix(ItemConfig item) => item.AllProfiles switch
+    {
+        null => "",
+        _ when _profile != null => "      [aus dem Standardprofil]",
+        SharedPosition.Top => "      [für alle Profile: oben]",
+        _ => "      [für alle Profile: unten]"
+    };
+
+    /// <summary>Zeilenliste selbst zeichnen: im Profil die gemeinsamen Zeilen grau.</summary>
+    private void SetUpSharedItems()
+    {
+        _items.DrawMode = DrawMode.OwnerDrawFixed;
+        _items.ItemHeight = Math.Max(_items.ItemHeight, _items.Font.Height + LogicalToDeviceUnits(2));
+        _items.DrawItem += (_, e) =>
+        {
+            if (e.Index < 0 || e.Index >= _items.Items.Count)
+            {
+                return;
+            }
+            e.DrawBackground();
+            var selected = (e.State & DrawItemState.Selected) != 0;
+            var color = selected ? SystemColors.HighlightText : IsLockedItem(e.Index) ? SystemColors.GrayText : _items.ForeColor;
+            TextRenderer.DrawText(e.Graphics, _items.Items[e.Index]?.ToString(), e.Font ?? _items.Font, e.Bounds, color,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix | TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine);
+            e.DrawFocusRectangle();
+        };
+    }
+
+    /// <summary>Im Profil: gemeinsame Zeilen sperren und sagen, warum.</summary>
+    private void ShowSharedState(ItemConfig? item)
+    {
+        if (!IsLockedItem(_items.SelectedIndex))
+        {
+            return;
+        }
+        foreach (var control in new Control[] { _itemLabel, _itemValue, _itemSplit, _itemBar, _itemHide, _itemSeparator, _itemOnlyOn, _itemNotOn, _itemWhen })
+        {
+            control.Enabled = false;
+        }
+        _status.Text = $"Diese Zeile steht im Standardprofil „für alle Profile ({(item!.AllProfiles == SharedPosition.Top ? "oben" : "unten")})“ – ändern lässt sie sich nur dort.";
+    }
+
+    /// <summary>Markierte Zeilen des Standardprofils fuer alle Profile oben bzw. unten setzen - oder die Markierung entfernen.</summary>
+    private void SetShared(SharedPosition? position)
+    {
+        if (_profile != null)
+        {
+            _status.Text = "Zeilen für alle Profile werden im Standardprofil festgelegt – oben in der Leiste „Standardprofil“ wählen.";
+            return;
+        }
+        var indices = SelectedItemsWithBlocks();
+        if (indices.Count == 0)
+        {
+            _status.Text = "Zuerst Zeilen markieren (mehrere mit Strg bzw. Umschalt).";
+            return;
+        }
+        foreach (var index in indices)
+        {
+            _config.Items[index].AllProfiles = position;
+        }
+        RefreshItems(indices[0]);
+        Changed();
+        _status.Text = position == null
+            ? $"{indices.Count} Zeile(n) gelten nicht mehr für alle Profile."
+            : $"{indices.Count} Zeile(n) stehen jetzt in jedem Profil mit eigenen Zeilen {(position == SharedPosition.Top ? "oben" : "unten")}.";
     }
 
     /// <summary>Uebertraegt Felder (Name, Value, Bezeichnung) in ein anderes Profil; bei gleichem Namen wird gefragt.</summary>
@@ -1117,25 +1296,4 @@ public sealed partial class MainForm
         Changed();
     }
 
-    /// <summary>Untermenue "In Profil kopieren": alle Profile ausser dem bearbeiteten.</summary>
-    private ToolStripMenuItem CopyToProfileMenu(string text, Action<string?> copy)
-    {
-        var menu = new ToolStripMenuItem(text);
-        menu.DropDownItems.Add("(leer)");
-        menu.DropDownOpening += (_, _) =>
-        {
-            menu.DropDownItems.Clear();
-            var targets = new List<string?> { null };
-            targets.AddRange(_root.Profiles?.Keys ?? Enumerable.Empty<string>());
-            foreach (var target in targets.Where(t => !string.Equals(t, _profile, StringComparison.OrdinalIgnoreCase)))
-            {
-                menu.DropDownItems.Add(target ?? StandardProfileName, null, (_, _) => copy(target));
-            }
-            if (menu.DropDownItems.Count == 0)
-            {
-                menu.DropDownItems.Add(new ToolStripMenuItem("(keine weiteren Profile)") { Enabled = false });
-            }
-        };
-        return menu;
-    }
 }

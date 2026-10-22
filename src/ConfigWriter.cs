@@ -102,6 +102,7 @@ internal static class ConfigWriter
             "\"split\" teilt den Wert an Trennzeichen in mehrere Zeilen untereinander, z. B. \", \" bei mehreren Grafikkarten (mehrere mit | getrennt).",
             "\"bar\" zeichnet einen Balken aus einem Prozentwert: \"{percent}\" bei \"drives\", \"{rampercent}\", \"{battery}\" - mit Text darunter, ohne Text statt des Werts.",
             "Block: { \"block\": \"Name\", \"when\": \"{virtual} = nein\" } ... { \"endBlock\": true } - der Inhalt erscheint nur, wenn der Filter zutrifft.",
+            "\"allProfiles\": \"Top\" / \"Bottom\" (nur hier im Standardprofil): die Zeile steht auch in Profilen mit eigenen Zeilen - davor bzw. danach.",
             "Platzhalter mit aktuellen Werten: BGInfo-Reloaded.exe --list-tags   Kürzen: {cpu,30}  {cpu,30...}  {serial,-8}"
         },
         ["profiles"] = new[]

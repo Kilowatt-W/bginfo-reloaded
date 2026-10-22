@@ -247,6 +247,9 @@ WMI-Dialog, Anzeige von Blöcken und Filtern. Noch von Hand durchzuklicken:
       als Standardbild; der Editor sagt bei der Auswahl, welche Datei als Standard gilt
 - [x] 2026-10-13 Version 2.16.0: Balken für Prozentwerte (`bar` je Zeile, `colors.barUsed`/`barFree`,
       `panel.barHeight`) – Laufwerke, RAM, Akku; mit Text darunter, ohne Text statt des Werts (drei Fälle gerendert)
+- [x] 2026-10-22 Version 2.21.0: gemeinsame Zeilen für alle Profile (`"allProfiles": "Top"/"Bottom"`, im Profil grau
+      und gesperrt); Mehrfachauswahl in der Zeilenliste, Kopieren von Zeilen und Feldern in mehrere Profile;
+      Platzhalter `{profile}` (gewähltes Profil, sonst „Standardprofil“)
 - [x] 2026-10-22 Version 2.20.0: Trennstrich als Zeilenart (`"separator": true`, `colors.separator`,
       `panel.separatorWidth`); Editor „+ Trennstrich“ und Umschalten bei Leerraum; enthält 2.19.1
 - [x] 2026-10-22 Version 2.19.1: eigene Felder des Standardprofils gelten in jedem Profil (beim Zusammenführen
