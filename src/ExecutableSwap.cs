@@ -33,7 +33,17 @@ public static class ExecutableSwap
             var backupPath = target + ".old";
             if (File.Exists(backupPath))
             {
-                File.Delete(backupPath);
+                try
+                {
+                    File.Delete(backupPath);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    // Die alte Fassung laeuft noch - z.B. eine --watch-Instanz, gestartet vor einem frueheren
+                    // Update. Loeschen geht dann nicht, Umbenennen der aktuellen exe schon: unter einem
+                    // freien Namen ablegen; CleanupOldBinary raeumt ihn spaeter mit auf.
+                    backupPath = $"{target}.{DateTime.Now:yyyyMMddHHmmss}.old";
+                }
             }
             File.Move(target, backupPath);
         }
@@ -52,13 +62,14 @@ public static class ExecutableSwap
             {
                 return;
             }
-            // Auch die .old der jeweils anderen exe (Editor bzw. Hauptprogramm) im selben Ordner.
-            foreach (var backupPath in Directory.GetFiles(Path.GetDirectoryName(currentExe)!, "*.exe.old"))
+            // Auch die .old der jeweils anderen exe (Editor bzw. Hauptprogramm) im selben Ordner - und
+            // die mit Zeitstempel, die entstehen, wenn eine .old beim Update noch lief (Replace).
+            foreach (var backupPath in Directory.GetFiles(Path.GetDirectoryName(currentExe)!, "*.exe*.old"))
             {
                 try
                 {
                     File.Delete(backupPath);
-                    if (string.Equals(backupPath, currentExe + ".old", StringComparison.OrdinalIgnoreCase))
+                    if (backupPath.StartsWith(currentExe + ".", StringComparison.OrdinalIgnoreCase))
                     {
                         Console.WriteLine("Alte Version aus vorherigem Update aufgeraeumt.");
                     }

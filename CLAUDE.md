@@ -110,6 +110,9 @@ echtes Windows nötig, das in dieser Entwicklungsumgebung nicht zur Verfügung s
 - **Selbst-Update aus einem Ordner (`FolderUpdater.cs`, `update.path`/`update.auto`)**: vergleicht
   die Dateiversion der exe im Ordner mit der eigenen, kopiert erst vollständig neben die eigene exe
   (`.new`) und tauscht dann über `ExecutableSwap` – nie direkt vom Share über die laufende Datei.
+  Läuft eine `.old` aus einem früheren Update noch (z. B. die `--watch`-Instanz des Autostarts),
+  lässt sie sich nicht löschen; `Replace` legt die exe dann als `<exe>.<Zeitstempel>.old` ab, und
+  `CleanupOldBinary` räumt `*.exe*.old` auf.
   Eingespielt wird eine höhere Version – oder dieselbe Version, wenn die Datei im Ordner jünger ist
   und eine andere Größe hat (neu gebaut ohne erhöhte Nummer); nie eine ältere. Der automatische Weg in `RunOnceLocked` läuft nicht bei
   `--preview` und darf den Lauf nie scheitern lassen (nur Warnung). `--update` ohne `--repo` nimmt
