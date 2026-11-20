@@ -1132,4 +1132,6 @@ Repository getestet; das Update aus einem Ordner ist getestet.
 
 Braucht das [.NET SDK](https://dotnet.microsoft.com/download) (8 oder neuer) und legt
 `BGInfo-Reloaded.exe` und `BGInfo-Reloaded-Editor.exe` in den Ordner `publish_tmp`. Neue eingebaute Platzhalter werden in `src/ValueResolver.cs`
-ergänzt, die Versionsnummer steht in `src/BGInfo-Reloaded.csproj`.
+ergänzt, die Versionsnummer steht in `src/BGInfo-Reloaded.csproj`. Mit
+`-SignCertThumbprint <Fingerabdruck>` (optional `-TimestampServer <URL>`) werden beide exe mit einem
+Codesignatur-Zertifikat aus dem Zertifikatsspeicher signiert (siehe README, „Signieren“).

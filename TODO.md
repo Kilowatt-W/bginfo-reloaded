@@ -247,6 +247,9 @@ WMI-Dialog, Anzeige von Blöcken und Filtern. Noch von Hand durchzuklicken:
       als Standardbild; der Editor sagt bei der Auswahl, welche Datei als Standard gilt
 - [x] 2026-10-13 Version 2.16.0: Balken für Prozentwerte (`bar` je Zeile, `colors.barUsed`/`barFree`,
       `panel.barHeight`) – Laufwerke, RAM, Akku; mit Text darunter, ohne Text statt des Werts (drei Fälle gerendert)
+- [x] 2026-11-20 Version 2.22.2: `Build.ps1 -SignCertThumbprint` (optional `-TimestampServer`) signiert beide exe
+      per Authenticode; Brückenversion signiert mit dem neuen Codesignatur-Zertifikat gebaut. Nebenbei:
+      `powershell.exe -File .\Build.ps1` scheiterte, weil Windows PowerShell 5.1 `$PSScriptRoot` im param-Block leer lässt
 - [x] 2026-10-22 Version 2.22.1: Editor zeigt in der Fußzeile den Rechnernamen und was er laut Rechnergruppen bekommt;
       orange Hinweis, wenn dieser Rechner ein anderes Profil bekommt als das bearbeitete (fehlte seit 2.19.0), Klick wählt es
 - [x] 2026-10-22 Version 2.22.0: Autostart-Zustand im Editor (Fußzeile, Reiter „Autostart und Werkzeuge“ mit

@@ -13,7 +13,7 @@ einer einzigen, fensterlosen `BGInfo-Reloaded.exe` (self-contained, auf dem Ziel
 vorinstalliert sein, kein PowerShell zur Laufzeit). Inhalt und Aussehen des Panels kommen aus einer
 zentral verteilbaren `BGInfo-Reloaded.json`, die sich mit dem mitgelieferten Editor bearbeiten lässt.
 
-Stand: Version 2.22.1 (2026-10-22). Bis Version 1.4.0 hieß das Projekt „BgInfoNative“.
+Stand: Version 2.22.2 (2026-11-20). Bis Version 1.4.0 hieß das Projekt „BgInfoNative“.
 
 - **Bedienung, alle Aufrufe, Konfiguration und Fehlersuche:** [HOWTO.md](HOWTO.md)
   ([English](HOWTO.en.md))
@@ -73,7 +73,7 @@ Quellcode gebaut.
 |---|---|
 | `src/` | Quellcode von `BGInfo-Reloaded.exe` |
 | `editor/` | Quellcode von `BGInfo-Reloaded-Editor.exe`, dem grafischen Editor für die `BGInfo-Reloaded.json` (nur für Admins, wird nicht verteilt) |
-| `Build.ps1` | baut beide Programme nach `publish_tmp/` (`-SkipEditor` lässt den Editor weg) |
+| `Build.ps1` | baut beide Programme nach `publish_tmp/` (`-SkipEditor` lässt den Editor weg, `-SignCertThumbprint` signiert beide) |
 | `BGInfo-Reloaded.sample.json` | kommentierte Beispiel-Konfiguration mit allen Optionen; nutzt die Demo-Hintergründe |
 | `backgrounds/` | Demo-Hintergründe je Auflösung (1920×1080, 3440×1440, 3840×2160, 5120×1440) |
 | `icons/` | Programm-Icons; werden beim Bauen in `BGInfo-Reloaded.exe` und `BGInfo-Reloaded-Editor.exe` eingebettet |
@@ -171,6 +171,18 @@ dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=
 auf denen global nur die „Visual Studio Offline Packages“ eingerichtet sind. Cross-Kompilieren von
 Linux/macOS aus hat mit dem früheren ImageSharp-Stand funktioniert; seit der Umstellung auf
 `System.Drawing.Common` wurde es nicht erneut geprüft.
+
+### Signieren
+
+```powershell
+.\Build.ps1 -SignCertThumbprint <Fingerabdruck> [-TimestampServer <URL>]
+```
+
+signiert beide exe nach dem Bauen per Authenticode (SHA-256). Das Codesignatur-Zertifikat muss mit
+privatem Schlüssel in `CurrentUser\My` oder `LocalMachine\My` liegen; wird es nicht gefunden, bricht
+der Build ab. Ohne `-TimestampServer` endet die Signatur mit dem Ablauf des Zertifikats. Die Dateien
+am GitHub-Release baut der Workflow, sie sind unsigniert – eine signierte Fassung für das eigene Netz
+entsteht lokal und wird z. B. über `update.path` verteilt.
 
 ## Quellcode
 

@@ -151,6 +151,11 @@ echtes Windows nötig, das in dieser Entwicklungsumgebung nicht zur Verfügung s
   Windows folgen (Komma statt Punkt). Datums- und Zahlenwerte von Platzhaltern immer über
   `ValueFormat.FormatDate/FormatDateTime/FormatNumber` ausgeben, nie mit festem Format. Die
   Einstellungen gelten je Thread; der `ValueResolver` setzt sie vor jedem `Expand`.
+- **Signieren (`Build.ps1 -SignCertThumbprint`, seit 2.22.2)**: nur lokal, der Fingerabdruck kommt
+  ausschließlich als Parameter (keine Einstellungsdatei im Repo, weil das Zertifikat Firmennamen
+  trägt; welches Zertifikat, steht in `CLAUDE.local.md`). Der Release-Workflow baut unsigniert.
+  `$OutputDirectory` wird erst im Rumpf vorbelegt – Windows PowerShell 5.1 lässt `$PSScriptRoot`
+  im param-Block bei `-File` leer.
 - **`src/nuget.config`** bindet nuget.org projektlokal ein, weil auf dem
   Windows-Entwicklungsrechner global nur die "Visual Studio Offline Packages" konfiguriert sind.
 - **`OutputType` ist `WinExe`**, nicht `Exe` – sonst blitzt bei jedem Lauf des Scheduled Tasks ein

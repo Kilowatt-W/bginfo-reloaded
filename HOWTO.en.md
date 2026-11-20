@@ -1139,4 +1139,6 @@ real repository yet; the update from a folder has been tested.
 Requires the [.NET SDK](https://dotnet.microsoft.com/download) (8 or newer) and puts
 `BGInfo-Reloaded.exe` and `BGInfo-Reloaded-Editor.exe` into the folder `publish_tmp`. New built-in
 placeholders are added in `src/ValueResolver.cs`; the version number is in
-`src/BGInfo-Reloaded.csproj`.
+`src/BGInfo-Reloaded.csproj`. With `-SignCertThumbprint <thumbprint>` (optionally
+`-TimestampServer <URL>`) both exe files are signed with a code signing certificate from the
+certificate store (see README, "Signing").
