@@ -109,7 +109,7 @@ public static class FolderUpdater
         }
         if (options.Config)
         {
-            var done = SyncFile(Path.Combine(folder, AppConfig.FileName), Path.Combine(ownDirectory, AppConfig.FileName), checkOnly, keepBackup: true, log);
+            var done = SyncFile(Path.Combine(folder, AppConfig.FileName), Path.Combine(ownDirectory, AppConfig.FileName), checkOnly, keepBackup: true, log, ValidateConfigFile);
             changes += done;
             configUpdated = done > 0 && !checkOnly;
         }
@@ -185,6 +185,14 @@ public static class FolderUpdater
         try
         {
             File.Copy(source, staged, overwrite: true);
+            // Geprueft wird die lokale Kopie, nicht die Datei auf dem Share - sonst koennte sie zwischen
+            // Pruefen und Kopieren noch ausgetauscht werden.
+            if (installedHere && RejectedSignature(local, staged) is { } reason)
+            {
+                log($"Warnung: {name} {available} aus '{folder}' NICHT eingespielt - {reason}.");
+                File.Delete(staged);
+                return 0;
+            }
             ExecutableSwap.Replace(local, staged);
             log($"  -> {name} auf {available} aktualisiert, aktiv ab dem naechsten Start");
             return 1;
@@ -202,6 +210,32 @@ public static class FolderUpdater
             }
             return 0;
         }
+    }
+
+    /// <summary>
+    /// Ist die installierte exe gueltig signiert, muss die neue es auch sein - und vom selben Herausgeber
+    /// (gleiches Zertifikats-Subject, so bleibt ein erneuertes Zertifikat gleichen Namens gueltig). Sonst
+    /// koennte jeder, der in den Update-Ordner schreibt, eine beliebige exe verteilen. Eine unsignierte
+    /// Installation (z. B. aus einem GitHub-Release) nimmt weiter jede Fassung an. Liefert den Grund
+    /// der Ablehnung oder null.
+    /// </summary>
+    private static string? RejectedSignature(string installed, string candidate)
+    {
+        var installedSigner = CodeSignature.ValidSigner(installed);
+        if (installedSigner == null)
+        {
+            return null;
+        }
+        var candidateSigner = CodeSignature.ValidSigner(candidate);
+        if (candidateSigner == null)
+        {
+            return CodeSignature.AnySigner(candidate) is { } invalid
+                ? $"ihre Signatur ({invalid}) ist ungueltig oder nicht vertrauenswuerdig; die installierte ist signiert von {installedSigner}"
+                : $"sie ist nicht signiert, die installierte schon ({installedSigner})";
+        }
+        return string.Equals(candidateSigner, installedSigner, StringComparison.OrdinalIgnoreCase)
+            ? null
+            : $"sie ist von {candidateSigner} signiert, die installierte von {installedSigner}";
     }
 
     private static int SyncBackgrounds(string folder, string ownDirectory, bool checkOnly, Action<string> log)
@@ -228,7 +262,7 @@ public static class FolderUpdater
     /// Aenderungsdatum bleibt beim Kopieren erhalten - danach gelten beide als gleich. Eine lokal
     /// neuere Datei wird nicht ueberschrieben, und nichts wird geloescht.
     /// </summary>
-    private static int SyncFile(string source, string target, bool checkOnly, bool keepBackup, Action<string> log)
+    private static int SyncFile(string source, string target, bool checkOnly, bool keepBackup, Action<string> log, Func<string, string?>? validate = null)
     {
         if (!File.Exists(source))
         {
@@ -249,21 +283,53 @@ public static class FolderUpdater
             return 1;
         }
 
+        // Erst vollstaendig neben das Ziel kopieren (und pruefen), dann umbenennen: eine abgebrochene oder
+        // kaputte Datei vom Share ersetzt so nie die lokale.
+        var staged = target + ".new";
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.Copy(source, staged, overwrite: true);
+            if (validate?.Invoke(staged) is { } problem)
+            {
+                File.Delete(staged);
+                log($"Warnung: {name} aus dem Update-Ordner NICHT übernommen - {problem}");
+                return 0;
+            }
             if (exists && keepBackup)
             {
                 File.Copy(target, target + ".bak", overwrite: true);
             }
-            File.Copy(source, target, overwrite: true);
+            File.Move(staged, target, overwrite: true);
             log($"{name} {(exists ? "aktualisiert" : "geholt")}{(exists && keepBackup ? $" (vorherige Fassung: {name}.bak)" : "")}.");
             return 1;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             log($"Warnung: {name} konnte nicht geholt werden ({ex.Message}).");
+            try
+            {
+                File.Delete(staged);
+            }
+            catch
+            {
+                // Rest der Kopie - der naechste Versuch ueberschreibt sie
+            }
             return 0;
+        }
+    }
+
+    /// <summary>Null, wenn die Datei eine lesbare Konfiguration ist, sonst der Fehler.</summary>
+    private static string? ValidateConfigFile(string file)
+    {
+        try
+        {
+            AppConfig.FromJson(File.ReadAllText(file), file);
+            return null;
+        }
+        catch (InvalidOperationException ex)
+        {
+            return ex.Message;
         }
     }
 

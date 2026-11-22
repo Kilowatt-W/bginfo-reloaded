@@ -960,7 +960,10 @@ needs no `--config`.
 After every successful load a central source is copied to
 `%LOCALAPPDATA%\BGInfo-Reloaded\config.cache.json`. If it cannot be reached (notebook on the road,
 server down), this cache is used; if there is none yet, the default values apply. In both cases the
-run does not fail; the log contains a warning.
+run does not fail; the log contains a warning. Since 2.24.0 the same applies when a network source
+(URL, UNC) delivers something unusable – an HTML page (e.g. the sign-in page of a captive portal) or
+broken JSON: only what could be read is cached. This also applies to group files, the `include` file
+and list files. A local file with an error still stops the run with a clear message.
 
 ## Autostart
 
@@ -1091,6 +1094,16 @@ the same folder.
 - **Security:** whoever may write to this folder decides which program runs on the machines.
   Restrict write access there to the admins; users only need read access. The program folder on the
   machines must be writable for the user, otherwise the exe cannot replace itself.
+- **Signature (since 2.24.0):** if the installed exe has a valid signature (Authenticode), a new
+  version is only installed if it is also validly signed by the same publisher (same certificate
+  name) – otherwise the old one stays, and the log states why. The local copy is checked, not the
+  file in the folder. Supply signed installations from signed builds only (the exe in the GitHub
+  releases are unsigned). An unsigned installation still accepts any higher version.
+- If the configuration comes unsecured over `http://`, `update.path` and `update.auto` from it are
+  not used (warning in the log) – otherwise whoever tampers with the connection could slip in an
+  update folder of their own. `https://`, local paths and UNC paths are not affected.
+- With `"config": true` the `BGInfo-Reloaded.json` from the folder is only taken over if it can be
+  read; a broken file does not replace the local one.
 
 **From GitHub releases** (no SDK needed on the target machine):
 

@@ -158,9 +158,8 @@ public static class AppTaskScheduler
     {
         try
         {
-            using var searcher = new System.Management.ManagementObjectSearcher(
-                $"SELECT CommandLine FROM Win32_Process WHERE Name = '{FolderUpdater.MainExe}' AND SessionId = {Process.GetCurrentProcess().SessionId}");
-            return searcher.Get().Cast<System.Management.ManagementObject>()
+            return ValueResolver.QueryWmi(
+                    $"SELECT CommandLine FROM Win32_Process WHERE Name = '{FolderUpdater.MainExe}' AND SessionId = {Process.GetCurrentProcess().SessionId}")
                 .Any(process => (process["CommandLine"] as string ?? "").Contains("--watch", StringComparison.OrdinalIgnoreCase));
         }
         catch

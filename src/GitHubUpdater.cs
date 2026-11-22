@@ -145,11 +145,16 @@ public static class GitHubUpdater
                 "dotnet publish erzeugte exe unter genau diesem Namen anhaengen.");
 
             Console.WriteLine($"Lade {AssetName} {tagName} herunter...");
-            var tempFile = Path.Combine(Path.GetTempPath(), $"BGInfo-Reloaded_{tagName}.exe");
+            // Neben die eigene exe laden, nicht nach %TEMP%: dort bekaeme die Datei die Rechte des
+            // Benutzer-Temp-Ordners (andere Benutzer koennten sie nicht starten), und der Tausch waere auf
+            // einem anderen Laufwerk kein einfaches Umbenennen.
+            var ownExe = Environment.ProcessPath
+                ?? throw new InvalidOperationException("Konnte den eigenen Programmpfad nicht ermitteln.");
+            var staged = ownExe + ".new";
             var bytes = await http.GetByteArrayAsync(downloadUrl);
-            await File.WriteAllBytesAsync(tempFile, bytes);
+            await File.WriteAllBytesAsync(staged, bytes);
 
-            ExecutableSwap.ReplaceRunningExecutable(tempFile);
+            ExecutableSwap.ReplaceRunningExecutable(staged);
             Console.WriteLine($"{AssetName} auf {tagName} aktualisiert. Wird beim naechsten Start dieser exe aktiv.");
         }
 

@@ -260,13 +260,35 @@ public sealed class ValueResolver
         return BuiltIns.FirstOrDefault(b => string.Equals(b.Name, token, StringComparison.OrdinalIgnoreCase))?.Read();
     }
 
+    /// <summary>Hoechstens so lange wartet eine WMI-Abfrage auf das naechste Ergebnis.</summary>
+    private static readonly TimeSpan WmiTimeout = TimeSpan.FromSeconds(15);
+
+    /// <summary>
+    /// WMI-Abfrage mit Zeitlimit; jedes Ergebnis wird nach Gebrauch freigegeben (auch bei vorzeitigem
+    /// Abbruch der Schleife). Ohne Zeitlimit blockierte ein haengender WMI-Provider den ganzen Lauf - und
+    /// ohne Freigeben sammeln sich in --watch und im Editor COM-Objekte an. Ein Zeitlimit endet mit einer
+    /// ManagementException, die Aufrufer wie jeden anderen WMI-Fehler behandeln.
+    /// </summary>
+    internal static IEnumerable<ManagementBaseObject> QueryWmi(string wql, string scope = @"root\cimv2")
+    {
+        var options = new System.Management.EnumerationOptions { Timeout = WmiTimeout, ReturnImmediately = true, Rewindable = false };
+        using var searcher = new ManagementObjectSearcher(scope, wql, options);
+        using var results = searcher.Get();
+        foreach (ManagementBaseObject obj in results)
+        {
+            using (obj)
+            {
+                yield return obj;
+            }
+        }
+    }
+
     /// <summary>Alle Eigenschaften einer WMI-Klasse (erste Instanz) als fertige Platzhalter mit aktuellem Wert.</summary>
     public static List<(string Tag, string Value)> ListWmiClass(string className, string? where = null)
     {
         var result = new List<(string, string)>();
         var suffix = string.IsNullOrWhiteSpace(where) ? "" : $" where {where.Trim()}";
-        using var searcher = new ManagementObjectSearcher($"SELECT * FROM {className}{suffix}");
-        foreach (ManagementBaseObject obj in searcher.Get())
+        foreach (var obj in QueryWmi($"SELECT * FROM {className}{suffix}"))
         {
             foreach (var property in obj.Properties.Cast<PropertyData>().OrderBy(p => p.Name))
             {
@@ -285,8 +307,7 @@ public sealed class ValueResolver
     public static List<string> ListWmiClasses()
     {
         var result = new List<string>();
-        using var searcher = new ManagementObjectSearcher("SELECT * FROM meta_class WHERE __CLASS LIKE 'Win32[_]%'");
-        foreach (ManagementBaseObject obj in searcher.Get())
+        foreach (var obj in QueryWmi("SELECT * FROM meta_class WHERE __CLASS LIKE 'Win32[_]%'"))
         {
             var name = obj["__CLASS"]?.ToString();
             if (name != null && !name.StartsWith("Win32_Perf", StringComparison.OrdinalIgnoreCase)
@@ -440,8 +461,7 @@ public sealed class ValueResolver
     private static string GetLastUpdate()
     {
         (DateTime Date, string Id)? latest = null;
-        using var searcher = new ManagementObjectSearcher("SELECT HotFixID, InstalledOn FROM Win32_QuickFixEngineering");
-        foreach (ManagementBaseObject obj in searcher.Get())
+        foreach (var obj in QueryWmi("SELECT HotFixID, InstalledOn FROM Win32_QuickFixEngineering"))
         {
             // InstalledOn kommt als Text im US-Format (M/d/yyyy).
             if (DateTime.TryParse(obj["InstalledOn"]?.ToString(), System.Globalization.CultureInfo.InvariantCulture,
@@ -476,8 +496,7 @@ public sealed class ValueResolver
     private static string GetAntivirus()
     {
         var names = new List<string>();
-        using var searcher = new ManagementObjectSearcher(@"root\SecurityCenter2", "SELECT displayName FROM AntiVirusProduct");
-        foreach (ManagementBaseObject obj in searcher.Get())
+        foreach (var obj in QueryWmi("SELECT displayName FROM AntiVirusProduct", @"root\SecurityCenter2"))
         {
             if (obj["displayName"]?.ToString() is { Length: > 0 } name && !names.Contains(name))
             {
@@ -524,8 +543,7 @@ public sealed class ValueResolver
     private static string GetGraphicsAdapters()
     {
         var names = new List<string>();
-        using var searcher = new ManagementObjectSearcher("SELECT Name FROM Win32_VideoController");
-        foreach (ManagementBaseObject obj in searcher.Get())
+        foreach (var obj in QueryWmi("SELECT Name FROM Win32_VideoController"))
         {
             if (obj["Name"]?.ToString()?.Trim() is { Length: > 0 } name && !names.Contains(name))
             {
@@ -539,8 +557,7 @@ public sealed class ValueResolver
     private static string GetDisks()
     {
         var disks = new List<string>();
-        using var searcher = new ManagementObjectSearcher("SELECT Model, Size FROM Win32_DiskDrive");
-        foreach (ManagementBaseObject obj in searcher.Get())
+        foreach (var obj in QueryWmi("SELECT Model, Size FROM Win32_DiskDrive"))
         {
             var size = long.TryParse(obj["Size"]?.ToString(), out var bytes) ? $" ({bytes / 1024.0 / 1024.0 / 1024.0:0} GB)" : "";
             disks.Add($"{obj["Model"]?.ToString()?.Trim()}{size}");
@@ -633,8 +650,7 @@ public sealed class ValueResolver
     {
         if (expression.StartsWith("select ", StringComparison.OrdinalIgnoreCase))
         {
-            using var searcher = new ManagementObjectSearcher(expression);
-            foreach (ManagementBaseObject obj in searcher.Get())
+            foreach (var obj in QueryWmi(expression))
             {
                 foreach (PropertyData property in obj.Properties)
                 {
@@ -668,8 +684,7 @@ public sealed class ValueResolver
         try
         {
             var wql = $"SELECT {propertyName} FROM {className}" + (where != null ? $" WHERE {where}" : "");
-            using var searcher = new ManagementObjectSearcher(wql);
-            foreach (ManagementBaseObject obj in searcher.Get())
+            foreach (var obj in QueryWmi(wql))
             {
                 var value = FormatWmiValue(obj.Properties[propertyName]);
                 if (value != null)

@@ -1278,7 +1278,7 @@ public sealed class AppConfig
     /// </summary>
     public static (AppConfig Config, string Source) Load(string? explicitSource)
     {
-        var (config, source) = LoadFile(explicitSource);
+        var (config, source) = LoadFile(explicitSource, forRun: true);
         // Erst die Listendateien: sie entscheiden mit, in welche Gruppe der Rechner faellt.
         foreach (var hostNote in config.ResolveHostFiles())
         {
@@ -1345,26 +1345,28 @@ public sealed class AppConfig
             System.Text.Encoding.UTF8.GetBytes(source.ToLowerInvariant())))[..8];
         var cacheFile = Path.Combine(WallpaperState.StateDirectory, $"group.{sourceId}.cache.json");
 
-        string json;
         var shownSource = source;
+        AppConfig config;
         try
         {
-            json = ReadSource(source);
+            var json = ReadSource(source);
+            // Erst pruefen, dann cachen: eine kaputte Antwort darf den letzten guten Stand nicht ersetzen.
+            config = Parse(json, source);
             TryWriteCache(cacheFile, json);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or HttpRequestException or TaskCanceledException)
+        catch (Exception ex) when (IsUnavailable(ex, source))
         {
+            var problem = ex is InvalidOperationException ? "nicht lesbar" : "nicht erreichbar";
             if (!File.Exists(cacheFile))
             {
-                Console.WriteLine($"Warnung: Konfiguration der Gruppe „{group.Name}“ '{source}' nicht erreichbar ({ex.Message}) und kein Cache vorhanden - verwende die Hauptkonfiguration.");
+                Console.WriteLine($"Warnung: Konfiguration der Gruppe „{group.Name}“ '{source}' {problem} ({ex.Message}) und kein Cache vorhanden - verwende die Hauptkonfiguration.");
                 return null;
             }
-            Console.WriteLine($"Warnung: Konfiguration der Gruppe „{group.Name}“ '{source}' nicht erreichbar ({ex.Message}) - verwende lokalen Cache.");
-            json = File.ReadAllText(cacheFile);
+            Console.WriteLine($"Warnung: Konfiguration der Gruppe „{group.Name}“ '{source}' {problem} ({ex.Message}) - verwende lokalen Cache.");
+            config = Parse(File.ReadAllText(cacheFile), source);
             shownSource = $"{cacheFile} (Cache von {source})";
         }
-
-        var config = Parse(json, source);
+        config.IgnoreUpdateFromInsecureSource(source);
         // Die Zuordnung hat die Hauptdatei getroffen; Listen und Gruppen der Gruppendatei gelten nicht.
         config.Hosts = new HostsConfig { OnExcluded = config.Hosts.OnExcluded };
         Console.WriteLine($"Gruppe „{group.Name}“ (passt auf \"{matchedBy}\"): verwende {source}");
@@ -1446,32 +1448,25 @@ public sealed class AppConfig
             source = Path.GetFullPath(Path.Combine(BaseDirectory, source));
         }
 
-        string json;
         string note;
-        try
-        {
-            json = ReadSource(source);
-            note = $"Zentrale Datei: {source}";
-            TryWriteCache(IncludeCacheFile, json);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or HttpRequestException or TaskCanceledException)
-        {
-            if (!File.Exists(IncludeCacheFile))
-            {
-                return $"Warnung: zentrale Datei '{source}' nicht erreichbar ({ex.Message}) und kein Cache vorhanden - ihre Felder und Zeilen fehlen.";
-            }
-            json = File.ReadAllText(IncludeCacheFile);
-            note = $"Warnung: zentrale Datei '{source}' nicht erreichbar ({ex.Message}) - verwende lokalen Cache.";
-        }
-
         IncludeFile? central;
         try
         {
-            central = JsonSerializer.Deserialize<IncludeFile>(json, JsonOptions);
+            var json = ReadSource(source);
+            // Erst pruefen, dann cachen: eine kaputte Antwort darf den letzten guten Stand nicht ersetzen.
+            central = DeserializeInclude(json, source);
+            note = $"Zentrale Datei: {source}";
+            TryWriteCache(IncludeCacheFile, json);
         }
-        catch (JsonException ex)
+        catch (Exception ex) when (IsUnavailable(ex, source))
         {
-            throw new InvalidOperationException($"Zentrale Datei '{source}' ist kein gueltiges JSON: {ex.Message}");
+            var problem = ex is InvalidOperationException ? "nicht lesbar" : "nicht erreichbar";
+            if (!File.Exists(IncludeCacheFile))
+            {
+                return $"Warnung: zentrale Datei '{source}' {problem} ({ex.Message}) und kein Cache vorhanden - ihre Felder und Zeilen fehlen.";
+            }
+            central = DeserializeInclude(File.ReadAllText(IncludeCacheFile), IncludeCacheFile);
+            note = $"Warnung: zentrale Datei '{source}' {problem} ({ex.Message}) - verwende lokalen Cache.";
         }
 
         foreach (var (name, definition) in central?.Fields ?? new())
@@ -1491,9 +1486,11 @@ public sealed class AppConfig
     }
 
     /// <summary>Wie <see cref="Load"/>, aber ohne die zentrale Datei einzumischen - so, wie die Datei selbst aussieht.</summary>
-    public static (AppConfig Config, string Source) LoadWithoutInclude(string? explicitSource) => LoadFile(explicitSource);
+    /// <param name="forRun">Fuer einen Lauf (Update): Einstellungen, die aus einer ungesicherten Quelle nicht gelten
+    /// duerfen, werden verworfen (<see cref="IgnoreUpdateFromInsecureSource"/>). Fuer Export/Bearbeiten: false.</param>
+    public static (AppConfig Config, string Source) LoadWithoutInclude(string? explicitSource, bool forRun = false) => LoadFile(explicitSource, forRun);
 
-    private static (AppConfig Config, string Source) LoadFile(string? explicitSource)
+    private static (AppConfig Config, string Source) LoadFile(string? explicitSource, bool forRun)
     {
         var central = explicitSource;
         if (string.IsNullOrWhiteSpace(central))
@@ -1505,24 +1502,34 @@ public sealed class AppConfig
         {
             central = Environment.ExpandEnvironmentVariables(central.Trim());
             string json;
+            AppConfig config;
             try
             {
                 json = ReadSource(central);
+                // Erst pruefen, dann cachen: eine kaputte Antwort darf den letzten guten Stand nicht ersetzen.
+                config = Parse(json, central);
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or HttpRequestException or TaskCanceledException)
+            catch (Exception ex) when (IsUnavailable(ex, central))
             {
+                var problem = ex is InvalidOperationException ? "nicht lesbar" : "nicht erreichbar";
                 if (File.Exists(CacheFile))
                 {
-                    Console.WriteLine($"Warnung: Konfiguration '{central}' nicht erreichbar ({ex.Message}) - verwende lokalen Cache.");
+                    Console.WriteLine($"Warnung: Konfiguration '{central}' {problem} ({ex.Message}) - verwende lokalen Cache.");
                     var cached = Parse(File.ReadAllText(CacheFile), CacheFile);
                     cached.BaseDirectory = DirectoryOfSource(central);
+                    if (forRun)
+                    {
+                        cached.IgnoreUpdateFromInsecureSource(central);
+                    }
                     return (cached, $"{CacheFile} (Cache von {central})");
                 }
-                Console.WriteLine($"Warnung: Konfiguration '{central}' nicht erreichbar ({ex.Message}) und kein Cache vorhanden - verwende Standardwerte.");
+                Console.WriteLine($"Warnung: Konfiguration '{central}' {problem} ({ex.Message}) und kein Cache vorhanden - verwende Standardwerte.");
                 return (new AppConfig(), "eingebaute Standardwerte");
             }
-
-            var config = Parse(json, central);
+            if (forRun)
+            {
+                config.IgnoreUpdateFromInsecureSource(central);
+            }
             TryWriteCache(CacheFile, json);
             return (config, central);
         }
@@ -1630,6 +1637,44 @@ public sealed class AppConfig
         source.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
         source.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Fehler, bei denen eine zentrale Quelle als nicht verfuegbar gilt und der Cache einspringt: nicht
+    /// erreichbar - und bei Netzquellen (URL, UNC) auch eine nicht lesbare Antwort. Eine lokale Datei mit
+    /// Fehler soll dagegen weiter auffallen statt still durch den Cache ersetzt zu werden.
+    /// </summary>
+    private static bool IsUnavailable(Exception ex, string source) =>
+        ex is IOException or UnauthorizedAccessException or HttpRequestException or TaskCanceledException
+        || (ex is InvalidOperationException && (IsUrl(source) || source.StartsWith(@"\\", StringComparison.Ordinal)));
+
+    private static IncludeFile? DeserializeInclude(string json, string source)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<IncludeFile>(json, JsonOptions);
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidOperationException($"Zentrale Datei '{source}' ist kein gueltiges JSON: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// update.path und update.auto aus einer ungesichert (http://) geladenen Datei nicht befolgen: wer
+    /// die Verbindung manipuliert, koennte sonst einen eigenen Update-Ordner unterschieben. Nur fuer den
+    /// Lauf - gespeichert oder exportiert wird die Datei unveraendert.
+    /// </summary>
+    public void IgnoreUpdateFromInsecureSource(string source)
+    {
+        if (!source.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+            || (string.IsNullOrWhiteSpace(Update.Path) && !Update.Auto))
+        {
+            return;
+        }
+        Console.WriteLine($"Warnung: '{source}' wird ungesichert über http geladen - update.path und update.auto daraus werden ignoriert (https verwenden).");
+        Update.Path = null;
+        Update.Auto = false;
+    }
+
     private static string ReadSource(string source)
     {
         if (!IsUrl(source))
@@ -1639,7 +1684,16 @@ public sealed class AppConfig
 
         using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
         http.DefaultRequestHeaders.UserAgent.ParseAdd($"BGInfo-Reloaded/{GitHubUpdater.CurrentVersion}");
-        return http.GetStringAsync(source).GetAwaiter().GetResult();
+        using var response = http.GetAsync(source).GetAwaiter().GetResult();
+        response.EnsureSuccessStatusCode();
+        // Eine HTML-Seite (Anmeldeseite eines Captive-Portals, Fehlerseite eines Proxys) ist nie eine
+        // unserer Dateien - wie "nicht erreichbar" behandeln, damit der Cache greift.
+        if (response.Content.Headers.ContentType?.MediaType is { } mediaType
+            && mediaType.Contains("html", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new IOException($"Antwort ist eine HTML-Seite ({mediaType}), keine Konfigurations- oder Listendatei");
+        }
+        return response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
     }
 
     private static AppConfig Parse(string json, string source)

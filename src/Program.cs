@@ -201,7 +201,7 @@ static class EntryPoint
                 // Reihenfolge ohne Angabe: Ordner aus "update.path", dann "update.repo", dann das frueher
                 // mit --repo gemerkte Repository. Was aus einem Ordner geholt wird, steht in "update".
                 var folder = GetStringOption(args, "--from");
-                var (updateConfig, _) = AppConfig.LoadWithoutInclude(configSource);
+                var (updateConfig, _) = AppConfig.LoadWithoutInclude(configSource, forRun: true);
                 if (repo == null)
                 {
                     folder ??= updateConfig.ResolveUpdatePath();
@@ -319,6 +319,14 @@ static class EntryPoint
             catch (AbandonedMutexException)
             {
                 locked = true;
+            }
+            if (!locked && !preview)
+            {
+                // Ein anderer Lauf haengt seit 30 Sekunden - parallel zu rendern ergaebe zwei Schreiber auf
+                // dieselbe Bilddatei. Diesen Lauf auslassen; der naechste Start versucht es wieder.
+                // (Eine Vorschau schreibt in eine eigene Datei und darf trotzdem laufen.)
+                Console.Error.WriteLine("Warnung: ein anderer Lauf ist seit 30 Sekunden nicht fertig - dieser Lauf wird übersprungen.");
+                return;
             }
             RunOnceLocked(configSource, previewPath, preview);
         }

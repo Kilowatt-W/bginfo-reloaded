@@ -24,8 +24,8 @@
     <PublishTrimmed>false</PublishTrimmed>
 
     <!-- Gleiche Versionsnummer wie BGInfo-Reloaded.csproj fuehren. -->
-    <Version>2.23.0</Version>
-    <FileVersion>2.23.0.0</FileVersion>
+    <Version>2.24.0</Version>
+    <FileVersion>2.24.0.0</FileVersion>
     <Product>BGInfo-Reloaded Editor</Product>
     <AssemblyTitle>BGInfo-Reloaded Editor</AssemblyTitle>
     <ApplicationIcon>..\icons\BGInfo-Reloaded-Editor.ico</ApplicationIcon>

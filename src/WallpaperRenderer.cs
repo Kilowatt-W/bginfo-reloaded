@@ -626,20 +626,26 @@ public static class WallpaperRenderer
     {
         if (baseImagePath != null && File.Exists(baseImagePath))
         {
+            Bitmap? copy = null;
             try
             {
                 // Ueber einen Stream laden und in eine eigene 32-Bit-Bitmap kopieren: so bleibt die
                 // Quelldatei nicht gesperrt, und indizierte Formate (GIF, 8-Bit-PNG) werden zeichenbar.
                 using var stream = File.OpenRead(baseImagePath);
                 using var source = Image.FromStream(stream);
-                var copy = new Bitmap(source.Width, source.Height, PixelFormat.Format32bppArgb);
-                using var g = Graphics.FromImage(copy);
-                g.DrawImage(source, 0, 0, source.Width, source.Height);
-                return copy;
+                copy = new Bitmap(source.Width, source.Height, PixelFormat.Format32bppArgb);
+                using (var g = Graphics.FromImage(copy))
+                {
+                    g.DrawImage(source, 0, 0, source.Width, source.Height);
+                }
+                var loaded = copy;
+                copy = null;
+                return loaded;
             }
             catch
             {
                 // Kaputtes/nicht unterstuetztes Bildformat - dann eben synthetischer Hintergrund.
+                copy?.Dispose();
             }
         }
 
@@ -715,6 +721,11 @@ public static class WallpaperRenderer
 
     private static readonly string[] FallbackFontFamilies = { "Consolas", "Segoe UI", "Tahoma", "Arial", "Verdana" };
 
+    // Einmal je Prozess: jede InstalledFontCollection legt fuer alle Schriften neue FontFamily-Objekte an
+    // (GDI+-Handles), und gerendert wird bis zu zwoelfmal je Lauf - in --watch und im Editor dauerhaft.
+    // Die Sammlung bleibt absichtlich offen; die daraus erzeugten Fonts verweisen auf ihre Familien.
+    private static readonly Lazy<FontFamily[]> InstalledFamilies = new(() => new InstalledFontCollection().Families);
+
     /// <summary>
     /// GDI+ ersetzt eine unbekannte Schrift stillschweigend durch "Microsoft Sans Serif" bzw. wirft bei
     /// ganz fehlenden Schriften eine wenig hilfreiche ArgumentException. Deshalb wird hier ausdruecklich
@@ -723,8 +734,7 @@ public static class WallpaperRenderer
     /// </summary>
     private static Font CreateFontSafe(string familyName, float size, FontStyle style)
     {
-        using var installed = new InstalledFontCollection();
-        var families = installed.Families;
+        var families = InstalledFamilies.Value;
 
         foreach (var candidate in new[] { familyName }.Concat(FallbackFontFamilies).Distinct(StringComparer.OrdinalIgnoreCase))
         {

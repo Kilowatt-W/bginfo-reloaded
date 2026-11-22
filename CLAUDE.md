@@ -120,7 +120,17 @@ echtes Windows nötig, das in dieser Entwicklungsumgebung nicht zur Verfügung s
   (`.new`) und tauscht dann über `ExecutableSwap` – nie direkt vom Share über die laufende Datei.
   Läuft eine `.old` aus einem früheren Update noch (z. B. die `--watch`-Instanz des Autostarts),
   lässt sie sich nicht löschen; `Replace` legt die exe dann als `<exe>.<Zeitstempel>.old` ab, und
-  `CleanupOldBinary` räumt `*.exe*.old` auf.
+  `CleanupOldBinary` räumt die eigenen `*.exe*.old` auf (eigener Name oder `BGInfo-Reloaded*`). Scheitert
+  das Hinlegen der neuen Datei, legt `Replace` die alte zurück.
+  **Signaturprüfung (seit 2.24.0, `CodeSignature.cs`, `FolderUpdater.RejectedSignature`)**: ist die
+  installierte exe gültig signiert (WinVerifyTrust, ohne Sperrlistenabfrage), muss die `.new` gültig
+  und mit gleichem Zertifikats-Subject signiert sein – geprüft wird die lokale Kopie, nicht die Datei
+  auf dem Share (sonst Austausch zwischen Prüfen und Kopieren möglich). Unsignierte Installationen
+  nehmen weiter alles. Nur beim Ordner-Update, nicht beim GitHub-Update (Release-Assets unsigniert).
+  `X509Certificate.CreateFromSignedFile` ist SYSLIB0057 – bewusst unterdrückt, es gibt keinen Ersatz.
+  `update.config` geht über `.new` + `AppConfig.FromJson` (`ValidateConfigFile`), nie direkt.
+  `update.path`/`auto` aus einer `http://`-Quelle verwirft `IgnoreUpdateFromInsecureSource` – nur für
+  den Lauf (`Load`, `LoadWithoutInclude(…, forRun: true)` bei `--update`), nie beim Exportieren.
   Eingespielt wird eine höhere Version – oder dieselbe Version, wenn die Datei im Ordner jünger ist
   und eine andere Größe hat (neu gebaut ohne erhöhte Nummer); nie eine ältere. Der automatische Weg in `RunOnceLocked` läuft nicht bei
   `--preview` und darf den Lauf nie scheitern lassen (nur Warnung). `--update` ohne `--repo` nimmt
@@ -264,6 +274,16 @@ echtes Windows nötig, das in dieser Entwicklungsumgebung nicht zur Verfügung s
   `%LOCALAPPDATA%\BGInfo-Reloaded\editor-layout.txt`.
 - Eingebaute Platzhalter stehen nur in `ValueResolver.BuiltIns`; `--list-tags` (`TagList.cs`) liest
   dieselbe Liste.
+- **WMI nur über `ValueResolver.QueryWmi`** (seit 2.24.0): Zeitlimit 15 s je Ergebnis, jedes Objekt
+  wird nach Gebrauch freigegeben. Keine eigenen `ManagementObjectSearcher` mehr anlegen – ohne Limit
+  blockiert ein hängender Provider den Lauf, ohne Freigeben wachsen `--watch` und Editor. Im Editor
+  heißt `EnumerationOptions` mehrdeutig (System.IO) – voll qualifizieren.
+- **Zentrale Quellen und Cache** (`AppConfig.LoadFile`, `ResolveGroupConfig`, `ResolveInclude`): erst
+  einlesen/prüfen, dann cachen. `IsUnavailable` entscheidet, wann der Cache einspringt – bei
+  Netzquellen (URL, UNC) auch bei unlesbarem Inhalt, bei lokalen Dateien nur, wenn sie fehlen.
+  `ReadSource` behandelt eine HTML-Antwort als „nicht erreichbar“ (Captive-Portal).
+- **Render-Sperre** (`RunOnce`, Mutex `Local\BGInfo-Reloaded.Render`): ohne Sperre nach 30 s wird der
+  Lauf übersprungen, nur `--preview` darf trotzdem laufen.
 - **Eigene Felder und zentrale Datei**: `fields` (benannte Platzhalter) gehen über den Konstruktor in
   den `ValueResolver` – wer Texte der Konfiguration auflöst, muss `new ValueResolver(config)`
   benutzen. `AppConfig.ResolveInclude()` mischt Felder und Zeilen der `include`-Datei in das

@@ -79,21 +79,6 @@ WMI-Dialog, Anzeige von Blöcken und Filtern. Noch von Hand durchzuklicken:
 - [ ] Verteilkonzept festlegen: exe + `BGInfo-Reloaded.json` per Softwareverteilung/GPO oder zentrale
       Konfiguration per Share/URL; `--register-task` muss je Benutzer laufen (z. B. Anmeldeskript)
 
-### Aus dem Code-Review (2026-11-22), noch nicht umgesetzt
-
-- [ ] Sicherheit: `update.path`/`update.auto` gelten auch aus einer per `http://` geladenen Konfiguration –
-      wer die Verbindung manipuliert, bestimmt die eingespielte exe. Vorschlag: `update.*` aus URL-Quellen nur bei
-      `https` übernehmen und vor dem Tausch die Authenticode-Signatur mit der der eigenen exe vergleichen
-- [ ] Zentrale Dateien (`include`, Gruppendatei, Listendateien) erst parsen, dann cachen; bei kaputter Antwort
-      (z. B. HTML eines Captive-Portals) auf den Cache zurückfallen statt den Lauf abzubrechen
-- [ ] `update.config`: Datei vom Share erst als `.new` kopieren und mit `AppConfig.FromJson` prüfen, dann umbenennen
-- [ ] WMI-Abfragen mit Timeout (`EnumerationOptions.Timeout`) und `ManagementObjectCollection`/-Objekte freigeben
-      (wichtig für `--watch` und den Editor-Timer)
-- [ ] `GitHubUpdater`: neben die Ziel-exe (`.new`) statt nach `%TEMP%` laden (Rechte, atomarer Tausch)
-- [ ] Render-Mutex: nach 30 s ohne Lock abbrechen statt trotzdem zu rendern
-- [ ] GDI+: `InstalledFontCollection` in `CreateFontSafe` einmal zwischenspeichern; `copy` in `LoadBaseImage` im
-      Fehlerfall freigeben
-
 ## Erledigt
 
 - [x] 2026-10-01 Konfigurationsdatei `BGInfo-Reloaded.json` (Inhalt, Position, Farben, Schrift, Hintergrundbild)
@@ -265,6 +250,11 @@ WMI-Dialog, Anzeige von Blöcken und Filtern. Noch von Hand durchzuklicken:
 - [x] 2026-11-20 Version 2.22.2: `Build.ps1 -SignCertThumbprint` (optional `-TimestampServer`) signiert beide exe
       per Authenticode; Brückenversion signiert mit dem neuen Codesignatur-Zertifikat gebaut. Nebenbei:
       `powershell.exe -File .\Build.ps1` scheiterte, weil Windows PowerShell 5.1 `$PSScriptRoot` im param-Block leer lässt
+- [x] 2026-11-22 Version 2.24.0: offene Punkte aus dem Code-Review – Update aus dem Ordner prüft die Signatur (signierte
+      Installation nimmt nur gültig signierte Fassungen desselben Herausgebers), `update.path`/`auto` aus `http://`-Quellen
+      ignoriert; zentrale Quellen erst prüfen, dann cachen, HTML-Antworten und kaputtes JSON aus Netzquellen fallen auf den
+      Cache zurück; `update.config` nur nach Prüfung; WMI mit Zeitlimit 15 s und Freigabe; GitHub-Update lädt neben die
+      exe; Render-Sperre: Lauf auslassen statt parallel rendern; GDI+-Schriftliste einmal je Prozess
 - [x] 2026-11-22 Version 2.23.0: Umstellung auf .NET 10 (LTS bis 2028-11; .NET 8 seit 2026-11-10 ohne Support),
       Single-File ohne Entpacken nach `%TEMP%`, Paket `Microsoft.Win32.Registry` entfernt, Release-Workflow auf
       .NET 10 und aktuelle Actions. Fixes aus dem Code-Review: `--update-source` baute den Editor statt der exe

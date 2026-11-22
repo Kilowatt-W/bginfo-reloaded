@@ -951,7 +951,11 @@ Aufruf kein `--config`.
 Eine zentrale Quelle wird nach jedem erfolgreichen Laden nach
 `%LOCALAPPDATA%\BGInfo-Reloaded\config.cache.json` kopiert. Ist sie nicht erreichbar (Notebook
 unterwegs, Server down), wird dieser Cache benutzt; gibt es noch keinen, gelten die Standardwerte.
-Der Lauf schlägt in beiden Fällen nicht fehl, im Log steht eine Warnung.
+Der Lauf schlägt in beiden Fällen nicht fehl, im Log steht eine Warnung. Seit 2.24.0 gilt dasselbe,
+wenn eine Netzquelle (URL, UNC) etwas Unbrauchbares liefert – eine HTML-Seite (z. B. die Anmeldeseite
+eines Captive-Portals) oder kaputtes JSON: Gecacht wird nur, was sich einlesen ließ. Das gilt auch für
+Gruppendateien, die `include`-Datei und Listendateien. Eine lokale Datei mit Fehler bricht den Lauf
+weiter mit einer klaren Meldung ab.
 
 ## Autostart
 
@@ -1084,6 +1088,17 @@ Ordner mit aktualisiert.
   läuft. Schreibrechte dort auf die Admins beschränken; die Benutzer brauchen nur Leserechte. Der
   Programmordner auf den Rechnern muss für den Benutzer beschreibbar sein, sonst kann sich die exe
   nicht selbst ersetzen.
+- **Signatur (seit 2.24.0):** Ist die installierte exe gültig signiert (Authenticode), wird eine neue
+  Fassung nur eingespielt, wenn sie ebenfalls gültig und vom selben Herausgeber (gleicher
+  Zertifikatsname) signiert ist – sonst bleibt die alte, und im Log steht der Grund. Geprüft wird die
+  lokale Kopie, nicht die Datei im Ordner. Signierte Installationen deshalb nur aus signierten Builds
+  versorgen (die exe aus den GitHub-Releases sind unsigniert). Eine unsignierte Installation nimmt
+  weiter jede höhere Version an.
+- Kommt die Konfiguration ungesichert über `http://`, gelten `update.path` und `update.auto` daraus
+  nicht (Warnung im Log) – sonst könnte, wer die Verbindung manipuliert, einen eigenen Update-Ordner
+  unterschieben. `https://`, lokale Pfade und UNC-Pfade sind nicht betroffen.
+- Mit `"config": true` wird die `BGInfo-Reloaded.json` aus dem Ordner nur übernommen, wenn sie sich
+  einlesen lässt; eine kaputte Datei ersetzt die lokale nicht.
 
 **Aus GitHub-Releases** (kein SDK auf dem Zielrechner nötig):
 
