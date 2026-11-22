@@ -1479,7 +1479,7 @@ public sealed partial class MainForm : Form
         // Format: je Feld eine Zeile "Name<Tab>Value<Tab>Bezeichnung".
         void CopyFields()
         {
-            var rows = _fields.SelectedCells.Cast<DataGridViewCell>().Select(cell => cell.OwningRow).Distinct()
+            var rows = _fields.SelectedCells.Cast<DataGridViewCell>().Select(cell => cell.OwningRow).OfType<DataGridViewRow>().Distinct()
                 .Where(row => !row.IsNewRow).OrderBy(row => row.Index).ToList();
             if (rows.Count == 0)
             {
@@ -1566,7 +1566,7 @@ public sealed partial class MainForm : Form
         fieldMenu.Items.Add("Felder kopieren (Strg+C)", null, (_, _) => CopyFields());
         fieldMenu.Items.Add("Felder einfügen (Strg+V)", null, (_, _) => PasteFields());
         fieldMenu.Items.Add("Felder in Profile kopieren…", null, (_, _) => CopyFieldsToProfiles(
-            _fields.SelectedCells.Cast<DataGridViewCell>().Select(cell => cell.OwningRow).Distinct().Where(row => !row.IsNewRow)
+            _fields.SelectedCells.Cast<DataGridViewCell>().Select(cell => cell.OwningRow).OfType<DataGridViewRow>().Distinct().Where(row => !row.IsNewRow)
                 .Select(row => (row.Cells[0].Value as string ?? "").Trim().Trim('{', '}')).Where(_config.Fields.ContainsKey).ToList()));
         _fields.ContextMenuStrip = fieldMenu;
 

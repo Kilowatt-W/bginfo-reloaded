@@ -966,7 +966,10 @@ legt zwei Scheduled Tasks für den aktuell angemeldeten Benutzer an:
 | `BGInfo-Reloaded - Logon` | bei jeder Anmeldung |
 | `BGInfo-Reloaded - Refresh` | alle 30 Minuten (bzw. `--interval-minutes`) |
 
-Die Tasks laufen auch im Akkubetrieb und haben kein Zeitlimit.
+Die Tasks laufen auch im Akkubetrieb. Ein Zeitlimit hat nur der Logon-Task mit `--watch` nicht (er
+läuft bis zur Abmeldung); alle anderen Läufe beendet die Aufgabenplanung nach 15 Minuten, damit ein
+hängender Lauf (WMI, Share) nicht jeden weiteren Start blockiert. Gilt für Tasks, die ab 2.23.0
+eingerichtet wurden – ältere Tasks einmal neu einrichten.
 
 ### Auf Auflösungswechsel reagieren
 
@@ -1114,7 +1117,8 @@ angegebenes Repository merkt sich das Programm weiterhin je Benutzer in
 `%LOCALAPPDATA%\BGInfo-Reloaded\update.json`. Ein privates Repository ist ohne Anmeldung nicht
 erreichbar.
 
-**Aus dem Quellcode** (braucht `git.exe` und das .NET SDK auf dem Rechner):
+**Aus dem Quellcode** (braucht `git.exe` und das .NET SDK 10 auf dem Rechner; gebaut wird
+`src\BGInfo-Reloaded.csproj`, eine neu angegebene Adresse ersetzt die des vorhandenen Klons):
 
 ```
 BGInfo-Reloaded.exe --update-source https://github.com/Kilowatt-W/bginfo-reloaded.git --branch main
@@ -1130,7 +1134,7 @@ Repository getestet; das Update aus einem Ordner ist getestet.
 .\Build.ps1
 ```
 
-Braucht das [.NET SDK](https://dotnet.microsoft.com/download) (8 oder neuer) und legt
+Braucht das [.NET SDK](https://dotnet.microsoft.com/download) (10 oder neuer) und legt
 `BGInfo-Reloaded.exe` und `BGInfo-Reloaded-Editor.exe` in den Ordner `publish_tmp`. Neue eingebaute Platzhalter werden in `src/ValueResolver.cs`
 ergänzt, die Versionsnummer steht in `src/BGInfo-Reloaded.csproj`. Mit
 `-SignCertThumbprint <Fingerabdruck>` (optional `-TimestampServer <URL>`) werden beide exe mit einem

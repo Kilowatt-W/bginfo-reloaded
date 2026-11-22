@@ -79,6 +79,21 @@ WMI-Dialog, Anzeige von Blöcken und Filtern. Noch von Hand durchzuklicken:
 - [ ] Verteilkonzept festlegen: exe + `BGInfo-Reloaded.json` per Softwareverteilung/GPO oder zentrale
       Konfiguration per Share/URL; `--register-task` muss je Benutzer laufen (z. B. Anmeldeskript)
 
+### Aus dem Code-Review (2026-11-22), noch nicht umgesetzt
+
+- [ ] Sicherheit: `update.path`/`update.auto` gelten auch aus einer per `http://` geladenen Konfiguration –
+      wer die Verbindung manipuliert, bestimmt die eingespielte exe. Vorschlag: `update.*` aus URL-Quellen nur bei
+      `https` übernehmen und vor dem Tausch die Authenticode-Signatur mit der der eigenen exe vergleichen
+- [ ] Zentrale Dateien (`include`, Gruppendatei, Listendateien) erst parsen, dann cachen; bei kaputter Antwort
+      (z. B. HTML eines Captive-Portals) auf den Cache zurückfallen statt den Lauf abzubrechen
+- [ ] `update.config`: Datei vom Share erst als `.new` kopieren und mit `AppConfig.FromJson` prüfen, dann umbenennen
+- [ ] WMI-Abfragen mit Timeout (`EnumerationOptions.Timeout`) und `ManagementObjectCollection`/-Objekte freigeben
+      (wichtig für `--watch` und den Editor-Timer)
+- [ ] `GitHubUpdater`: neben die Ziel-exe (`.new`) statt nach `%TEMP%` laden (Rechte, atomarer Tausch)
+- [ ] Render-Mutex: nach 30 s ohne Lock abbrechen statt trotzdem zu rendern
+- [ ] GDI+: `InstalledFontCollection` in `CreateFontSafe` einmal zwischenspeichern; `copy` in `LoadBaseImage` im
+      Fehlerfall freigeben
+
 ## Erledigt
 
 - [x] 2026-10-01 Konfigurationsdatei `BGInfo-Reloaded.json` (Inhalt, Position, Farben, Schrift, Hintergrundbild)
@@ -250,6 +265,13 @@ WMI-Dialog, Anzeige von Blöcken und Filtern. Noch von Hand durchzuklicken:
 - [x] 2026-11-20 Version 2.22.2: `Build.ps1 -SignCertThumbprint` (optional `-TimestampServer`) signiert beide exe
       per Authenticode; Brückenversion signiert mit dem neuen Codesignatur-Zertifikat gebaut. Nebenbei:
       `powershell.exe -File .\Build.ps1` scheiterte, weil Windows PowerShell 5.1 `$PSScriptRoot` im param-Block leer lässt
+- [x] 2026-11-22 Version 2.23.0: Umstellung auf .NET 10 (LTS bis 2028-11; .NET 8 seit 2026-11-10 ohne Support),
+      Single-File ohne Entpacken nach `%TEMP%`, Paket `Microsoft.Win32.Registry` entfernt, Release-Workflow auf
+      .NET 10 und aktuelle Actions. Fixes aus dem Code-Review: `--update-source` baute den Editor statt der exe
+      (erste gefundene .csproj) und konnte sich beim Lesen der Ausgabe verklemmen; Update-Tausch legt die alte exe
+      zurück, wenn die neue nicht an ihren Platz kommt; Aufräumen nur noch eigener `.old`; Zeitlimit 15 min für
+      Tasks ohne `--watch` (vorher blockierte ein hängender Lauf den Refresh-Task bis zur Abmeldung); gesperrte
+      `original.txt` lässt den Lauf nicht mehr scheitern; kein Absturz, wenn Windows keinen primären Monitor meldet
 - [x] 2026-10-22 Version 2.22.1: Editor zeigt in der Fußzeile den Rechnernamen und was er laut Rechnergruppen bekommt;
       orange Hinweis, wenn dieser Rechner ein anderes Profil bekommt als das bearbeitete (fehlte seit 2.19.0), Klick wählt es
 - [x] 2026-10-22 Version 2.22.0: Autostart-Zustand im Editor (Fußzeile, Reiter „Autostart und Werkzeuge“ mit

@@ -5,7 +5,7 @@
        aus ..\src, damit Vorschau und echtes Ergebnis nicht auseinanderlaufen koennen. -->
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <TargetFramework>net10.0-windows</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -16,7 +16,6 @@
     <SelfContained>true</SelfContained>
     <PublishSingleFile>true</PublishSingleFile>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
-    <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     <!-- Kulturdaten werden fuer format.culture gebraucht (Monatsnamen, Trennzeichen). Das Programm
          stellt sich beim Start trotzdem auf die neutrale Kultur (ValueFormat.PinInvariantCulture),
@@ -25,8 +24,8 @@
     <PublishTrimmed>false</PublishTrimmed>
 
     <!-- Gleiche Versionsnummer wie BGInfo-Reloaded.csproj fuehren. -->
-    <Version>2.22.2</Version>
-    <FileVersion>2.22.2.0</FileVersion>
+    <Version>2.23.0</Version>
+    <FileVersion>2.23.0.0</FileVersion>
     <Product>BGInfo-Reloaded Editor</Product>
     <AssemblyTitle>BGInfo-Reloaded Editor</AssemblyTitle>
     <ApplicationIcon>..\icons\BGInfo-Reloaded-Editor.ico</ApplicationIcon>
@@ -45,9 +44,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="System.Drawing.Common" Version="10.0.12" />
     <PackageReference Include="System.Management" Version="10.0.12" />
-    <PackageReference Include="Microsoft.Win32.Registry" Version="5.0.0" />
   </ItemGroup>
 
 </Project>

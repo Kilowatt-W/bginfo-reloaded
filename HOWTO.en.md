@@ -975,7 +975,10 @@ creates two scheduled tasks for the currently logged-on user:
 | `BGInfo-Reloaded - Logon` | at every logon |
 | `BGInfo-Reloaded - Refresh` | every 30 minutes (or `--interval-minutes`) |
 
-The tasks also run on battery power and have no time limit.
+The tasks also run on battery power. Only the logon task with `--watch` has no time limit (it runs
+until logoff); every other run is stopped by the Task Scheduler after 15 minutes, so that a hanging
+run (WMI, share) does not block every further start. Applies to tasks set up with 2.23.0 or later –
+set up older tasks once more.
 
 ### Reacting to resolution changes
 
@@ -1120,7 +1123,8 @@ internet connection). A repository given with `--repo` is
 still remembered per user in `%LOCALAPPDATA%\BGInfo-Reloaded\update.json`. A private repository
 cannot be reached without signing in.
 
-**From source** (requires `git.exe` and the .NET SDK on the machine):
+**From source** (requires `git.exe` and the .NET SDK 10 on the machine; `src\BGInfo-Reloaded.csproj` is
+built, and a newly given address replaces the one of the existing clone):
 
 ```
 BGInfo-Reloaded.exe --update-source https://github.com/Kilowatt-W/bginfo-reloaded.git --branch main
@@ -1136,7 +1140,7 @@ real repository yet; the update from a folder has been tested.
 .\Build.ps1
 ```
 
-Requires the [.NET SDK](https://dotnet.microsoft.com/download) (8 or newer) and puts
+Requires the [.NET SDK](https://dotnet.microsoft.com/download) (10 or newer) and puts
 `BGInfo-Reloaded.exe` and `BGInfo-Reloaded-Editor.exe` into the folder `publish_tmp`. New built-in
 placeholders are added in `src/ValueResolver.cs`; the version number is in
 `src/BGInfo-Reloaded.csproj`. With `-SignCertThumbprint <thumbprint>` (optionally

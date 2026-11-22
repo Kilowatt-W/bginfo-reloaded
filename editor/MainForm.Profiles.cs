@@ -1053,7 +1053,7 @@ public sealed partial class MainForm
 
     private void PasteItems()
     {
-        var json = Clipboard.GetData(ItemsClipboardFormat) as string ?? (Clipboard.ContainsText() ? Clipboard.GetText() : null);
+        var json = Clipboard.TryGetData<string>(ItemsClipboardFormat, out var own) ? own : Clipboard.ContainsText() ? Clipboard.GetText() : null;
         var items = json == null ? null : AppConfig.ItemsFromJson(json);
         if (items is not { Count: > 0 })
         {

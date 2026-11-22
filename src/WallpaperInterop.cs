@@ -178,6 +178,13 @@ public static class WallpaperInterop
             return new List<MonitorTarget> { new(1, 0, 0, width, height, GetPrimaryScreenDpi(), true) };
         }
 
+        // Genau ein Monitor muss primaer sein - alle Aufrufer verlassen sich darauf (First(IsPrimary)). Meldet
+        // Windows keinen (z. B. kurz waehrend eines Anzeigewechsels), gilt der erste als primaer.
+        if (!found.Any(m => m.Primary))
+        {
+            found[0] = found[0] with { Primary = true };
+        }
+
         return found
             .OrderByDescending(m => m.Primary)
             .ThenBy(m => m.Rect.Left)

@@ -14,7 +14,7 @@ Sysinternals BGInfo – Systeminfos auf dem Desktop-Wallpaper.
 so bleiben müssen: der C#-Namespace `BgInfoReloaded` (Bindestrich dort nicht erlaubt) und die
 Umgebungsvariable `BGINFORELOADED_CONFIG`.
 
-- **`src/`** – die verteilte Anwendung `BGInfo-Reloaded.exe` (.NET 8, fensterlos): Wallpaper rendern
+- **`src/`** – die verteilte Anwendung `BGInfo-Reloaded.exe` (.NET 10, fensterlos): Wallpaper rendern
   via System.Drawing/GDI+, Systeminfos via WMI, Scheduled Task via `schtasks.exe`, Selbst-Update
   via GitHub Releases oder `git clone`/`git pull` + Neubau.
 - **`editor/`** – `BGInfo-Reloaded-Editor.exe`, grafischer Editor für die `BGInfo-Reloaded.json` (wird nicht
@@ -41,13 +41,13 @@ Umgebungsvariable) gibt es bewusst nicht – der Nutzer hat sie ausdrücklich ab
 ## Build & Test
 
 ```bash
-# .NET SDK 8 wird gebraucht (auch zum Cross-Compilen von Linux/macOS aus moeglich):
+# .NET SDK 10 (oder neuer) wird gebraucht (auch zum Cross-Compilen von Linux/macOS aus moeglich):
 cd src
 dotnet build -c Release
 dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o ../publish_tmp
 ```
 
-Ergebnis ist eine ~35 MB `BGInfo-Reloaded.exe` (PE32+, win-x64). **Cross-Kompilieren von Linux aus
+Ergebnis ist eine ~39 MB `BGInfo-Reloaded.exe` (PE32+, win-x64). **Cross-Kompilieren von Linux aus
 funktioniert nachweislich** (wurde in der Entwicklungsumgebung so gemacht) – NuGet lädt automatisch
 die win-x64-Runtime-Pakete, kein Windows-Host zum Bauen nötig.
 
@@ -90,10 +90,18 @@ echtes Windows nötig, das in dieser Entwicklungsumgebung nicht zur Verfügung s
   `PanelLayout.BarBlock` zur Zeile dazu, ohne Text nicht – deshalb steckt sie in `LineHeight`.
   Rahmen (`border`, `DrawBorders`) liegen absichtlich im vorhandenen Innen- und Zeilenabstand und
   verändern die Maße des Panels nicht – sie richten sich nach den tatsächlich gezeichneten Zeilen.
-- **TargetFramework ist `net8.0-windows`**, nicht `net8.0` – das schaltet den
+- **TargetFramework ist `net10.0-windows`** (seit 2.23.0, vorher `net8.0-windows`; .NET 8 ist seit
+  2026-11-10 ohne Support), nicht `net10.0` – das schaltet den
   `SupportedOSPlatform("windows")`-Analyzer sauber frei für die WMI/Registry/P-Invoke-Aufrufe, ohne
-  eine echte Windows-Desktop-SDK-Abhängigkeit (WPF/WinForms) zu brauchen. Nicht auf `net8.0` zurück
-  ändern, sonst tauchen CA1416-Warnungen für jeden Windows-API-Aufruf auf.
+  eine echte Windows-Desktop-SDK-Abhängigkeit (WPF/WinForms) zu brauchen. Nicht auf `net10.0` zurück
+  ändern, sonst tauchen CA1416-Warnungen für jeden Windows-API-Aufruf auf. Beim nächsten Wechsel
+  (.NET 12 LTS, Ende 2027) Workflow (`dotnet-version`) und die Paketversionen mitziehen.
+- **Single-File ohne `IncludeAllContentForSelfExtract`** (seit 2.23.0): die Assemblys laufen aus dem
+  Speicher, nicht mehr aus einem Entpackordner unter `%TEMP%` (SDK-Warnung NETSDK1244, schnellerer
+  Start). `AppContext.BaseDirectory` zeigt trotzdem nicht verlässlich auf den Programmordner – weiter
+  `Environment.ProcessPath` nehmen.
+- **Pakete**: `Microsoft.Win32.Registry` ist Teil der Laufzeit (kein Paket mehr). Der Editor
+  referenziert `System.Drawing.Common` nicht selbst – es kommt mit Windows Forms (sonst NU1510).
 - **Scheduled Tasks laufen bewusst NICHT als SYSTEM** (`AppTaskScheduler`/`TaskScheduler.cs` bzw.
   `03-Register-BGInfoTask.ps1`) – SYSTEM hat keine interaktive Desktop-Session und kann daher kein
   sichtbares Wallpaper setzen. Immer `LogonType Interactive` / `/IT /RU <User>` verwenden.

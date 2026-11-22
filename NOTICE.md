@@ -52,8 +52,7 @@ Entstehungsgeschichte mit allen Entscheidungen steht in [`Übergabe.md`](Überga
 |---|---|---|---|
 | [System.Drawing.Common](https://www.nuget.org/packages/System.Drawing.Common) | MIT | Microsoft (.NET Foundation) | Rendering über GDI+ |
 | [System.Management](https://www.nuget.org/packages/System.Management) | MIT | Microsoft (.NET Foundation) | WMI-Abfragen |
-| [Microsoft.Win32.Registry](https://www.nuget.org/packages/Microsoft.Win32.Registry) | MIT | Microsoft (.NET Foundation) | Registry-Zugriff |
-| .NET 8 Runtime, Windows Forms (nur Editor) | MIT | Microsoft (.NET Foundation) | Laufzeit, in die exe eingebettet |
+| .NET 10 Runtime (samt Registry-Zugriff), Windows Forms (nur Editor) | MIT | Microsoft (.NET Foundation) | Laufzeit, in die exe eingebettet |
 
 Bis Version 1.2.0 wurde zum Rendern SixLabors ImageSharp verwendet; es ist seit dem 2026-10-01
 vollständig entfernt.

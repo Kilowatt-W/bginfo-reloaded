@@ -44,7 +44,8 @@ public static class AppTaskScheduler
         CreateTask(LogonTaskName, user, exePath, logonArguments, logonTrigger,
             watch
                 ? "Aktualisiert das BGInfo-Reloaded-Wallpaper bei der Anmeldung und danach bei jeder Aenderung von Aufloesung oder Skalierung."
-                : "Aktualisiert das BGInfo-Reloaded-Wallpaper bei der Anmeldung.");
+                : "Aktualisiert das BGInfo-Reloaded-Wallpaper bei der Anmeldung.",
+            longRunning: watch);
         Console.WriteLine(watch
             ? $"Task '{LogonTaskName}' registriert (startet bei jeder Anmeldung von {user} und bleibt aktiv, um auf Aufloesungswechsel zu reagieren)."
             : $"Task '{LogonTaskName}' registriert (laeuft bei jeder Anmeldung von {user}).");
@@ -58,7 +59,7 @@ public static class AppTaskScheduler
                 new XElement(Ns + "StartBoundary", DateTime.Today.ToString("yyyy-MM-dd'T'HH:mm:ss")),
                 new XElement(Ns + "Enabled", "true"));
             CreateTask(RefreshTaskName, user, exePath, arguments, refreshTrigger,
-                $"Aktualisiert das BGInfo-Reloaded-Wallpaper alle {refreshMinutes} Minuten.");
+                $"Aktualisiert das BGInfo-Reloaded-Wallpaper alle {refreshMinutes} Minuten.", longRunning: false);
             Console.WriteLine($"Task '{RefreshTaskName}' registriert (Refresh alle {refreshMinutes} Minuten).");
         }
         else
@@ -168,7 +169,12 @@ public static class AppTaskScheduler
         }
     }
 
-    private static void CreateTask(string name, string user, string exePath, string arguments, XElement trigger, string description)
+    /// <param name="longRunning">
+    /// true nur fuer die --watch-Instanz, die bis zur Abmeldung laeuft (kein Zeitlimit). Ein einzelner Lauf
+    /// bekommt ein Limit: haengt er (WMI-Provider, Share, Shell), beendet ihn die Aufgabenplanung - sonst
+    /// blockierte er wegen IgnoreNew jeden weiteren Start des Tasks bis zur Abmeldung.
+    /// </param>
+    private static void CreateTask(string name, string user, string exePath, string arguments, XElement trigger, string description, bool longRunning)
     {
         var exec = new XElement(Ns + "Exec", new XElement(Ns + "Command", exePath));
         if (arguments.Length > 0)
@@ -190,7 +196,7 @@ public static class AppTaskScheduler
                 new XElement(Ns + "StopIfGoingOnBatteries", "false"),
                 new XElement(Ns + "StartWhenAvailable", "true"),
                 new XElement(Ns + "Enabled", "true"),
-                new XElement(Ns + "ExecutionTimeLimit", "PT0S")),
+                new XElement(Ns + "ExecutionTimeLimit", longRunning ? "PT0S" : "PT15M")),
             new XElement(Ns + "Actions", new XAttribute("Context", "Author"), exec));
 
         var xmlFile = Path.Combine(Path.GetTempPath(), $"BGInfo-Reloaded-task-{Guid.NewGuid():N}.xml");

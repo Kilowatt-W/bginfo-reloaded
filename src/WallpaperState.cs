@@ -24,6 +24,21 @@ public static class WallpaperState
     /// </summary>
     public static string? ResolveOriginalWallpaper()
     {
+        try
+        {
+            return ResolveAndRememberOriginal();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // original.txt gesperrt, Kopie der Windows-Arbeitsdatei gescheitert o. Ae.: der Lauf soll daran nicht
+            // scheitern - dann ohne Merken weiter (beim naechsten Lauf wird es erneut versucht).
+            Console.Error.WriteLine($"Warnung: Original-Wallpaper konnte nicht gemerkt werden: {ex.Message}");
+            return PeekOriginalWallpaper();
+        }
+    }
+
+    private static string? ResolveAndRememberOriginal()
+    {
         if (File.Exists(OriginalPathFile))
         {
             var stored = File.ReadAllText(OriginalPathFile).Trim();

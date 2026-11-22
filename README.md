@@ -13,7 +13,7 @@ einer einzigen, fensterlosen `BGInfo-Reloaded.exe` (self-contained, auf dem Ziel
 vorinstalliert sein, kein PowerShell zur Laufzeit). Inhalt und Aussehen des Panels kommen aus einer
 zentral verteilbaren `BGInfo-Reloaded.json`, die sich mit dem mitgelieferten Editor bearbeiten lässt.
 
-Stand: Version 2.22.2 (2026-11-20). Bis Version 1.4.0 hieß das Projekt „BgInfoNative“.
+Stand: Version 2.23.0 (2026-11-22). Bis Version 1.4.0 hieß das Projekt „BgInfoNative“.
 
 - **Bedienung, alle Aufrufe, Konfiguration und Fehlersuche:** [HOWTO.md](HOWTO.md)
   ([English](HOWTO.en.md))
@@ -157,8 +157,9 @@ Windows ist eine Marke von Microsoft.
 .\Build.ps1
 ```
 
-Braucht das [.NET SDK](https://dotnet.microsoft.com/download) (8 oder neuer; gebaut und getestet mit
-SDK 10.0.401, Ziel-Framework bleibt `net8.0-windows`). Ergebnis ist eine ca. 36 MB große
+Braucht das [.NET SDK](https://dotnet.microsoft.com/download) (10 oder neuer; gebaut und getestet mit
+SDK 11.0.100, Ziel-Framework `net10.0-windows` – .NET 10 ist die LTS-Version mit Support bis
+November 2028, .NET 8 bekommt seit dem 2026-11-10 keine Updates mehr). Ergebnis ist eine ca. 39 MB große
 `BGInfo-Reloaded.exe` (self-contained, single-file, win-x64) im Ordner `publish_tmp/`. Der Ordner wird
 dabei nicht geleert; eine dort liegende `BGInfo-Reloaded.json` samt Hintergrundbildern bleibt erhalten. Von Hand:
 
@@ -229,16 +230,17 @@ wenn die Datei im Repository noch nicht nachgezogen ist. Der Pfad zu den Demo-Hi
 
 ## Abhängigkeiten
 
-Stand der Prüfung mit `dotnet list package --outdated/--vulnerable/--deprecated` am 2026-10-01:
+Stand der Prüfung mit `dotnet list package --outdated/--vulnerable/--deprecated` am 2026-11-22:
 keine bekannten Schwachstellen, keine als veraltet markierten Pakete.
 
 | Paket | Version | Lizenz | Zweck |
 |---|---|---|---|
-| System.Drawing.Common | 10.0.12 | MIT (Microsoft) | Rendering über GDI+ |
+| System.Drawing.Common | 10.0.12 | MIT (Microsoft) | Rendering über GDI+ (im Editor Teil von Windows Forms) |
 | System.Management | 10.0.12 | MIT (Microsoft) | WMI-Abfragen |
-| Microsoft.Win32.Registry | 5.0.0 | MIT (Microsoft) | Registry-Zugriff |
 
-Alle drei sind auf dem neuesten Stand, es gibt keine bewusst zurückgehaltenen Versionen mehr.
+Beide folgen der Laufzeit (.NET 10); die 11.0er-Pakete gehören zu .NET 11 (kein LTS). Der
+Registry-Zugriff ist Teil der .NET-Laufzeit, das frühere Paket `Microsoft.Win32.Registry` ist
+seit 2.23.0 entfernt.
 
 **Kein SixLabors ImageSharp mehr:** Bis zum 2026-10-01 lief das Rendering über ImageSharp. Das steht
 unter der „Six Labors Split License“ (ab 1 Mio. USD Jahresumsatz kostenpflichtig), und neuere

@@ -46,6 +46,25 @@ public static class ExecutableSwap
                 }
             }
             File.Move(target, backupPath);
+            try
+            {
+                File.Move(newFilePath, target);
+            }
+            catch
+            {
+                // Die neue Datei liess sich nicht an ihren Platz legen (z. B. vom Virenscanner gesperrt): die alte
+                // zuruecklegen, sonst fehlte die exe ganz und der naechste Task-Start liefe ins Leere.
+                try
+                {
+                    File.Move(backupPath, target);
+                }
+                catch
+                {
+                    // Zuruecklegen ging auch nicht - der urspruengliche Fehler ist der aussagekraeftigere.
+                }
+                throw;
+            }
+            return;
         }
         File.Move(newFilePath, target);
     }
@@ -63,8 +82,13 @@ public static class ExecutableSwap
                 return;
             }
             // Auch die .old der jeweils anderen exe (Editor bzw. Hauptprogramm) im selben Ordner - und
-            // die mit Zeitstempel, die entstehen, wenn eine .old beim Update noch lief (Replace).
-            foreach (var backupPath in Directory.GetFiles(Path.GetDirectoryName(currentExe)!, "*.exe*.old"))
+            // die mit Zeitstempel, die entstehen, wenn eine .old beim Update noch lief (Replace). Nur die
+            // eigenen: liegt die exe in einem gemeinsamen Werkzeugordner, gehoeren fremde .old nicht uns.
+            var ownName = Path.GetFileName(currentExe) + ".";
+            foreach (var backupPath in Directory.GetFiles(Path.GetDirectoryName(currentExe)!, "*.exe*.old")
+                .Where(file => Path.GetFileName(file) is var name
+                    && (name.StartsWith(ownName, StringComparison.OrdinalIgnoreCase)
+                        || name.StartsWith("BGInfo-Reloaded", StringComparison.OrdinalIgnoreCase))))
             {
                 try
                 {

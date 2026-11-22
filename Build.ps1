@@ -20,7 +20,7 @@
     bleibt die Signatur auch nach Ablauf des Zertifikats gueltig; ohne endet sie mit ihm.
 
 .NOTES
-    Braucht das .NET SDK (8 oder neuer): https://dotnet.microsoft.com/download
+    Braucht das .NET SDK (10 oder neuer): https://dotnet.microsoft.com/download
     Ausfuehren mit: powershell.exe -ExecutionPolicy Bypass -File .\Build.ps1
     Signiert:       .\Build.ps1 -SignCertThumbprint <Fingerabdruck> [-TimestampServer <URL>]
 #>
@@ -40,7 +40,7 @@ $ErrorActionPreference = 'Stop'
 if (-not $OutputDirectory) { $OutputDirectory = Join-Path $PSScriptRoot 'publish_tmp' }
 
 if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
-    throw "dotnet SDK nicht gefunden. Installieren: https://dotnet.microsoft.com/download (mindestens .NET 8)"
+    throw "dotnet SDK nicht gefunden. Installieren: https://dotnet.microsoft.com/download (mindestens .NET 10)"
 }
 
 # Zertifikat vor dem Bauen suchen, damit ein Tippfehler nicht erst nach Minuten auffaellt.

@@ -52,8 +52,7 @@ is in [`Übergabe.md`](Übergabe.md) (German only).
 |---|---|---|---|
 | [System.Drawing.Common](https://www.nuget.org/packages/System.Drawing.Common) | MIT | Microsoft (.NET Foundation) | rendering through GDI+ |
 | [System.Management](https://www.nuget.org/packages/System.Management) | MIT | Microsoft (.NET Foundation) | WMI queries |
-| [Microsoft.Win32.Registry](https://www.nuget.org/packages/Microsoft.Win32.Registry) | MIT | Microsoft (.NET Foundation) | registry access |
-| .NET 8 runtime, Windows Forms (editor only) | MIT | Microsoft (.NET Foundation) | runtime, embedded in the exe |
+| .NET 10 runtime (including registry access), Windows Forms (editor only) | MIT | Microsoft (.NET Foundation) | runtime, embedded in the exe |
 
 Up to version 1.2.0, SixLabors ImageSharp was used for rendering; it was removed completely on
 2026-10-01.
